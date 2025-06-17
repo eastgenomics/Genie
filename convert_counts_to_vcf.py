@@ -260,13 +260,26 @@ def write_variants_to_vcf(
         for field in info_fields:
             field_name = field["column_name"]
             if field_name in row and pd.notna(row[field_name]):
-                field_type = field["type"]
-                if field_type == "String":
-                    field_value = str(row[field_name])
-                elif field_type == "Integer":
-                    field_value = int(row[field_name])
-
-                record.info[field["id"]] = field_value
+                field_type = field.get("type")
+                type_map = {
+                    "String": str,
+                    "Character": str,
+                    "Integer": int,
+                    "Float": float,
+                    "Flag": lambda x: x,
+                }
+                converter = type_map.get(field_type)
+                if converter:
+                    try:
+                        field_value = converter(row[field_name])
+                        record.info[field["id"]] = field_value
+                    except Exception as err:
+                        print(f"Error converting field {field_name}: {err}")
+                else:
+                    print(
+                        f"Unsupported field type for field {field_name}: "
+                        f"{field_type}. Skipping"
+                    )
 
         # Add in original Genie GRCh37 chrom-pos-ref-alt
         orig_coord_str = f"{row['Chromosome']}_{row['Start_Position']}_{row['Reference_Allele']}_{row['Tumor_Seq_Allele2']}"

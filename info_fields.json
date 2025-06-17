@@ -109,7 +109,7 @@
         "number": "1",
         "type": "Integer",
         "description": "Genie count in Lymphatic Cancer NOS",
-        "column_name": "Lymphatic Cancer NOS_count"
+        "column_name": "Lymphatic Cancer, NOS_count"
     },
     {
         "id": "Mastocytosis_count",

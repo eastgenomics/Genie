@@ -50,8 +50,7 @@ def read_in_to_df(
         )
         return df
     except Exception as e:
-        print(f"Error reading in file: {e}")
-        sys.exit(1)
+        raise RuntimeError(f"Failed to read '{filename}': {e}") from e
 
 
 def read_txt_file_to_list(filename: str) -> list:

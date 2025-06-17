@@ -65,8 +65,7 @@ def merge_dataframes(
         )
         return merged_df
     except Exception as err:
-        print(f"Error merging dataframes: {err}")
-        return None
+        raise RuntimeError(f"Error merging dataframes: {err}") from err
 
 
 def perform_merge_checks(genie_data, genie_with_sample_ids):
