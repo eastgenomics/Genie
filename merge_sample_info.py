@@ -106,6 +106,14 @@ def main():
     genie_data = read_in_to_df(
         args.input_maf,
         header=0,
+        dtype={
+            "Hugo_Symbol": "str",
+            "Chromosome": "str",
+            "Start_Position": "Int64",
+            "Reference_Allele": "str",
+            "Tumor_Seq_Allele2": "str",
+            "Entrez_Gene_Id": "Int64",
+        },
     )
     sample_cancer_info = read_in_to_df(
         args.clinical_info,

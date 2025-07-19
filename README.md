@@ -1,9 +1,8 @@
 ## DI-1801 Generate counts from Genie data
-This folder contains scripts to take Genie MAF data, aggregate counts of each variant,
-convert each variant to a VCF-like description and output to a CSV and VCF.
+This folder contains scripts to take Genie MAF data, convert each variant to a VCF-like description and (post-liftover) aggregate counts of each variant.
 
 ### Subset Genie data
-The original Genie data has millions of rows, therefore we are going to subset the data to only variants in genies that are present in the Uranus pipeline for simpler processing. This requires a haemonc BED file, an email to identify yourself with Entrez and any extra symbols to include (optional).
+The original Genie data has millions of rows, therefore we will subset the data to only variants in genies that are present in the Uranus pipeline for simpler processing. This requires a haemonc BED file, an email to identify yourself with Entrez and any extra symbols to include (optional).
 Example command:
 ```
 python subset_genie_data.py \
@@ -14,9 +13,21 @@ python subset_genie_data.py \
   --output data_mutations_extended_haemonc_genes.txt
 ```
 
+### Convert MAF to VCF
+We need to convert each unique variant in the MAF data to VCF description in order to liftover to GRCh38. a FASTA (sourced from Ensembl) is required for the GRCh37 reference genome.
+Example command:
+```
+python convert_raw_maf_to_vcf.py \
+  --input data_mutations_extended_haemonc_genes.txt \
+  --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
+  --output_vcf data_mutations_extended_haemonc_genes.vcf
+```
+
+Note: the VCF should then be sorted and normalised with bcftools and lifted over to GRCh38 with Picard LiftoverVcf.
+
 ### Merge sample info
-We need to merge in the clinical data (patient IDs, cancer types etc.) from Genie for each sample so that we can generate
-count information.
+We need to merge in the clinical data (patient IDs, cancer types etc.) from Genie into the MAF data for each sample so that we can generate
+count information later.
 Example command:
 ```
 python merge_sample_info.py \
@@ -36,23 +47,17 @@ python generate_count_data.py \
   --output genie_17_aggregated_counts_GRCh37.txt
 ```
 
-### Convert counts to VCF
-Because each variant is in MAF-like format, in order to represent Genie variants in the same way
-as variants would be represented in a Uranus sample VCF, we want to convert them to a VCF-like
-description. This also means we can perform liftover to GRCh38 properly.
-A JSON file representing details of the fields to keep as INFO fields in the output VCF is required;
-an example `info_fields.json` is provided, and a FASTA (sourced from Ensembl) is also required for the GRCh37 reference genome.
+### Write counts to VCF
+Next we write the count data to VCF. A JSON file representing details of the fields to keep as INFO fields in the output VCF is required; an example `info_fields.json` is provided.
 Example command:
 ```
 python convert_counts_to_vcf.py \
   --input genie_17_aggregated_counts_GRCh37.txt \
-  --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
   --info_fields info_fields.json \
   --output_csv genie_17_aggregated_counts_GRCh37_vcf_description.csv \
   --output_vcf genie_17_aggregated_counts_GRCh37.vcf \
 ```
 
-Note: the VCF should then be sorted, compressed and normalised with bcftools and lifted over to GRCh38 with Picard LiftoverVcf.
 
 ### Add GRCh38 liftover to counts CSV
 To make a final CSV with GRCh38 lifted over variants and their aggregate counts, we want to read the CSV with count data in GRCh37 and the lifted over VCF back into a dataframe and merge the GRCh38 variant info with the CSV to write a final CSV file.
