@@ -4,6 +4,7 @@ import pandas as pd
 import pysam
 import re
 
+from tqdm import tqdm
 from utils import read_in_to_df
 
 
@@ -78,7 +79,7 @@ def read_in_fasta(filename):
 
 def get_unique_variant_rows(genie_data):
     """
-    Get unique rows from Genie data based on chrom, pos, ref and alt
+    Get unique variant rows from Genie data based on chrom, pos, ref and alt
 
     Parameters
     ----------
@@ -110,22 +111,22 @@ def convert_maf_like_variant_to_vcf_description(row, fasta):
     Parameters
     ----------
     row : pd.Series
-        Row of data to convert
+        Row of Genie data to convert
     fasta : pysam.FastaFile
         FASTA file as pysam object
 
     Returns
     -------
     vcf_chrom : str
-        Chrom in VCF-like format
+        CHROM in VCF-like format
     vcf_pos : int
-        Position in VCF-like format
+        POS in VCF-like format
     vcf_ref : str
-        Reference allele in VCF-like format
+        REF allele in VCF-like format
     vcf_alt : str
-        Alt allele in VCF-like format
+        ALT allele in VCF-like format
     """
-    # Set explicit datatypes to avoid any issues when querying
+    # Set explicit datatypes to avoid issues when querying
     chrom, pos, ref, alt = (
         str(row["Chromosome"]),
         int(row["Start_Position"]),
@@ -153,7 +154,7 @@ def convert_maf_like_variant_to_vcf_description(row, fasta):
             f" {chrom}-{pos}-{ref}-{alt}"
         )
 
-    # It's an indel
+    # It's a simple indel
     if (len(ref) == 0) or (len(alt) == 0):
         prefix_bp = ref_seq[0]
         # For simple insertions, pos is already position of preceding bp
@@ -174,21 +175,22 @@ def convert_maf_like_variant_to_vcf_description(row, fasta):
         if ref != ref_from_fasta:
             print(
                 f"Reference mismatch for {chrom}-{pos}-{ref}-{alt} -"
-                f" {ref_from_fasta} found in FASTA"
+                f" {ref_from_fasta} found in FASTA. Removing variant."
             )
+            return None
 
     return vcf_chrom, vcf_pos, vcf_ref, vcf_alt
 
 
-def convert_to_vcf_representation(genie_count_data, fasta):
+def convert_to_vcf_representation(genie_data, fasta):
     """
     Make new columns with the VCF-like description for chrom, pos,
     ref and alt in GRCh37
 
     Parameters
     ----------
-    genie_count_data : pd.DataFrame
-        Genie data with one row per variant and count info
+    genie_data : pd.DataFrame
+        Genie data with one row per variant
     fasta : pysam.FastaFile
         FASTA file as pysam object
 
@@ -198,28 +200,30 @@ def convert_to_vcf_representation(genie_count_data, fasta):
         Genie data with one row per variant and count info, with new columns
         chrom_vcf, pos_vcf, ref_vcf and alt_vcf
     """
-    genie_count_data[["chrom_vcf", "pos_vcf", "ref_vcf", "alt_vcf"]] = (
-        genie_count_data.apply(
-            lambda row: pd.Series(
-                convert_maf_like_variant_to_vcf_description(row, fasta)
-            ),
-            axis=1,
-        )
+    tqdm.pandas(desc="Converting to VCF representation")
+
+    def conv_or_none(row):
+        res = convert_maf_like_variant_to_vcf_description(row, fasta)
+        if res is None:
+            return pd.Series([pd.NA, pd.NA, pd.NA, pd.NA])
+        return pd.Series(res)
+
+    genie_data[["chrom_vcf", "pos_vcf", "ref_vcf", "alt_vcf"]] = (
+        genie_data.progress_apply(conv_or_none, axis=1)
     )
 
-    return genie_count_data
+    return genie_data
 
 
 def write_variants_to_vcf(genie_vcf_description, output_vcf, fasta):
     """
-    Write out the dataframe (with VCF-like description) to a VCF file
-    with the INFO fields specified in the JSON file
+    Write out variants in the the dataframe to a VCF file
 
     Parameters
     ----------
-    genie_counts_vcf_description : pd.DataFrame
-        Dataframe with one row per variant and count info and columns with
-        VCF-like description
+    genie_vcf_description : pd.DataFrame
+        Dataframe with one row per variant and columns with VCF-like
+        description
     output_vcf : str
         Name of output VCF file
     fasta : pysam.FastaFile
@@ -235,25 +239,40 @@ def write_variants_to_vcf(genie_vcf_description, output_vcf, fasta):
         "Genie_description",
         "1",
         "String",
-        "Original variant info from Genie",
+        "Original variant description from Genie",
     )
 
     vcf_out = pysam.VariantFile(output_vcf, "w", header=header)
-    # For each original variant, write new variant record with all INFO
-    # fields specified in the JSON file
+    # For each original variant, write new variant record
     # Take 1 away from start due to differences in Pysam representation
-    for _, row in genie_vcf_description.iterrows():
+    print("Writing variants to VCF file...")
+    for row in tqdm(
+        genie_vcf_description.itertuples(index=False),
+        total=genie_vcf_description.shape[0],
+    ):
+        # Make sure there wasn't a ref mismatch
+        if any(
+            pd.isna(getattr(row, attr))
+            for attr in ["chrom_vcf", "pos_vcf", "ref_vcf", "alt_vcf"]
+        ):
+            continue
+
+        info_fields = {}
+        # Add in original Genie GRCh37 chrom-pos-ref-alt
+        orig_coord_str = (
+            f"{getattr(row, 'Chromosome')}_{getattr(row, 'Start_Position')}_{getattr(row, 'Reference_Allele')}_{getattr(row, 'Tumor_Seq_Allele2')}"
+        )
+        info_fields["Genie_description"] = orig_coord_str
+
         record = vcf_out.new_record(
-            contig=str(row["chrom_vcf"]),
-            start=int(row["pos_vcf"]) - 1,
-            alleles=(row["ref_vcf"], row["alt_vcf"]),
+            contig=str(getattr(row, "chrom_vcf")),
+            start=int(getattr(row, "pos_vcf")) - 1,
+            alleles=(getattr(row, "ref_vcf"), getattr(row, "alt_vcf")),
             id=".",
             qual=None,
             filter=None,
+            info=info_fields,
         )
-        # Add in original Genie GRCh37 chrom-pos-ref-alt
-        orig_coord_str = f"{row['Chromosome']}_{row['Start_Position']}_{row['Reference_Allele']}_{row['Tumor_Seq_Allele2']}"
-        record.info["Genie_description"] = orig_coord_str
 
         vcf_out.write(record)
 

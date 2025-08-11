@@ -126,8 +126,9 @@ def read_vcf_to_df(vcf_file: str) -> pd.DataFrame:
         }
     )
 
-    # If the alleles were swapped during liftover, take the alt allele
-    # in GRCh37 as the reference allele and vice versa
+    # If the alleles were swapped during liftover (indicated by the
+    # SwappedAlleles INFO field), take the alt allele in GRCh37 as the ref
+    # allele and vice versa
     vcf_df["ref_grch37"] = np.where(
         vcf_df["SwappedAlleles"], vcf_df["alt_grch38"], vcf_df["ref_grch38"]
     )
@@ -217,6 +218,8 @@ def merge_dataframes(
             header=["Genie_Description", "Number_of_rows"],
             index=False,
         )
+    else:
+        print("All rows have GRCh38 liftover information.")
 
     # Keep only rows with liftover information
     liftover_rows = merged_df[~no_liftover]
@@ -229,13 +232,22 @@ def merge_dataframes(
             f" in the merged data with liftover: {len(liftover_rows)}"
         )
 
+    merged_df["grch38_description"] = (
+        merged_df["chrom_grch38"].astype(str)
+        + "_"
+        + merged_df["pos_grch38"].astype(str)
+        + "_"
+        + merged_df["ref_grch38"].astype(str)
+        + "_"
+        + merged_df["alt_grch38"].astype(str)
+    )
+
     return liftover_rows
 
 
 def main():
     args = parse_args()
-    # Read in Genie data, stripping any whitespace from Genie chrom, ref and
-    # alt
+    # Read in Genie data, stripping any whitespace from some fields
     genie_data_with_sample_info = read_in_to_df(
         args.genie_clinical,
         header=0,
@@ -257,16 +269,6 @@ def main():
 
     vcf_df = read_vcf_to_df(args.vcf)
     merged_df = merge_dataframes(genie_data_sample_info_unique_key, vcf_df)
-    merged_df["grch38_description"] = (
-        merged_df["chrom_grch38"].astype(str)
-        + "_"
-        + merged_df["pos_grch38"].astype(str)
-        + "_"
-        + merged_df["ref_grch38"].astype(str)
-        + "_"
-        + merged_df["alt_grch38"].astype(str)
-    )
-
     merged_df.to_csv(args.output, sep="\t", index=False)
 
 
