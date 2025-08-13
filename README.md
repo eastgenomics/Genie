@@ -33,3 +33,13 @@ python add_grch38_liftover.py \
   --vcf data_mutations_extended.vcf \
   --output data_mutations_extended_clinical_info_GRCh38.txt
 ```
+
+### Generate count data
+Example command:
+```
+python generate_count_data.py \
+  --input data_mutations_extended_clinical_info_GRCh38.txt \
+  --columns_to_aggregate columns_to_aggregate.txt \
+  --haemonc_cancer_types haemonc_cancer_types.txt \
+  --output Genie_v17_GRCh38_counts.tsv
+```
