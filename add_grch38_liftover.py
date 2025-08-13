@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import os
 import pandas as pd
 import pysam
 import warnings
@@ -232,14 +233,14 @@ def merge_dataframes(
             f" in the merged data with liftover: {len(liftover_rows)}"
         )
 
-    merged_df["grch38_description"] = (
-        merged_df["chrom_grch38"].astype(str)
+    liftover_rows["grch38_description"] = (
+        liftover_rows["chrom_grch38"].astype(str)
         + "_"
-        + merged_df["pos_grch38"].astype(str)
+        + liftover_rows["pos_grch38"].astype(str)
         + "_"
-        + merged_df["ref_grch38"].astype(str)
+        + liftover_rows["ref_grch38"].astype(str)
         + "_"
-        + merged_df["alt_grch38"].astype(str)
+        + liftover_rows["alt_grch38"].astype(str)
     )
 
     return liftover_rows
@@ -267,6 +268,8 @@ def main():
         genie_data_with_sample_info
     )
 
+    if not os.path.exists(args.vcf):
+        raise FileNotFoundError(f"VCF file {args.vcf} does not exist.")
     vcf_df = read_vcf_to_df(args.vcf)
     merged_df = merge_dataframes(genie_data_sample_info_unique_key, vcf_df)
     merged_df.to_csv(args.output, sep="\t", index=False)

@@ -1,11 +1,10 @@
 import argparse
-import os
 import pandas as pd
 import pysam
 import re
 
 from tqdm import tqdm
-from utils import read_in_to_df
+from utils import read_in_to_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,35 +45,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
-
-
-def read_in_fasta(filename):
-    """
-    Read in FASTA to pysam.FastaFile object
-
-    Parameters
-    ----------
-    filename : str
-        path to FASTA file
-
-    Returns
-    -------
-    fasta : pysam.FastaFile
-        FASTA file as pysam object
-    Raises
-    ------
-    FileNotFoundError
-        If FASTA file does not exist
-    ValueError
-        If FASTA file is not in the correct format
-    """
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"FASTA file not found: {filename}")
-    try:
-        fasta = pysam.FastaFile(filename)
-        return fasta
-    except ValueError as err:
-        raise ValueError(f"Invalid FASTA format: {err}") from err
 
 
 def get_unique_variant_rows(genie_data):

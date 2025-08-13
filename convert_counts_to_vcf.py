@@ -1,12 +1,11 @@
 import argparse
-import os
 import pandas as pd
 import pysam
 import re
 
 from tqdm import tqdm
 
-from utils import read_in_to_df
+from utils import read_in_to_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,36 +48,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def read_in_fasta(filename):
-    """
-    Read in FASTA to pysam.FastaFile object
-
-    Parameters
-    ----------
-    filename : str
-        path to FASTA file
-
-    Returns
-    -------
-    pysam.FastaFile
-        FASTA file as pysam object
-
-    Raises
-    ------
-    FileNotFoundError
-        If FASTA file does not exist
-    ValueError
-        If FASTA file is not in the correct format
-    """
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"FASTA file not found: {filename}")
-    try:
-        fasta = pysam.FastaFile(filename)
-        return fasta
-    except ValueError as err:
-        raise ValueError(f"Invalid FASTA format: {err}") from err
-
-
 def remove_disallowed_chars_from_columns(genie_data):
     """
     Remove characters that are not allowed in VCF INFO field names and values.
@@ -102,7 +71,12 @@ def remove_disallowed_chars_from_columns(genie_data):
         r"[\/\s,-]", "", regex=True
     )
 
-    genie_data["Consequence"] = genie_data["Consequence"].str.replace(",", "&")
+    if "Consequence" in genie_data.columns:
+        # Replace commas with '&' in the 'Consequence' column
+        # to make it compatible with VCF format
+        genie_data["Consequence"] = genie_data["Consequence"].str.replace(
+            ",", "&"
+        )
 
     return genie_data
 
@@ -152,7 +126,7 @@ def generate_info_field_header_info(genie_counts):
     for column in genie_counts.columns:
         # If it's a count, we want to add it as an int and write which
         # count type it is and whether all cancers or specific cancer type
-        if "count" in column:
+        if "count" in column.lower():
             count_type_description = camel_case_to_spaces(column.split("_")[0])
             cancer_type_description = camel_case_to_spaces(
                 column.split("_")[1]
@@ -278,7 +252,13 @@ def write_variants_to_vcf(
         genie_counts.itertuples(index=False), total=genie_counts.shape[0]
     ):
         # Split out chromosome, position, reference, and alternate alleles
-        chrom, pos, ref, alt = getattr(row, "grch38_description").split("_")
+        try:
+            chrom, pos, ref, alt = getattr(row, "grch38_description").split(
+                "_"
+            )
+        except (AttributeError, ValueError) as e:
+            print(f"Invalid grch38_description format: {e}")
+            continue
 
         # Format the INFO field values according to the converters
         formatted_info_fields = {}
@@ -309,14 +289,10 @@ def write_variants_to_vcf(
 
 def main():
     args = parse_args()
-    cols = list(
-        pd.read_csv("Genie_v17_GRCh38_aggregated.tsv", sep="\t", nrows=1)
-    )
     genie_counts = read_in_to_df(
         args.input,
         sep="\t",
         header=0,
-        usecols=[i for i in cols if i != "Entrez_Gene_Id"],
         dtype={
             "Start_Position": "Int64",
         },
