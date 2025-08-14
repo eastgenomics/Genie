@@ -2,7 +2,7 @@
 This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to UK Somatic Variant Intepretation Guidelines (S-VIG).
 
 ### Merge sample info
-The clinical data (patient IDs, cancer types etc.) must be merged into to the MAF data using `Tumor_Sample_Barcode` from the MAF data and `SAMPLE_ID` from the clinical data in order to generate patient counts for each variant later.
+The clinical data (patient IDs, cancer types etc.) must be merged into the MAF data using `Tumor_Sample_Barcode` from the MAF data and `SAMPLE_ID` from the clinical data in order to generate patient counts for each variant later.
 Example command:
 ```
 python merge_sample_info.py \

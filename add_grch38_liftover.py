@@ -1,12 +1,10 @@
 import argparse
 import numpy as np
+import os
 import pandas as pd
 import pysam
-import warnings
 
 from utils import read_in_to_df
-
-warnings.filterwarnings("ignore")
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,11 +127,12 @@ def read_vcf_to_df(vcf_file: str) -> pd.DataFrame:
     # If the alleles were swapped during liftover (indicated by the
     # SwappedAlleles INFO field), take the alt allele in GRCh37 as the ref
     # allele and vice versa
+    swapped = vcf_df["SwappedAlleles"].fillna(False).astype(bool)
     vcf_df["ref_grch37"] = np.where(
-        vcf_df["SwappedAlleles"], vcf_df["alt_grch38"], vcf_df["ref_grch38"]
+        swapped, vcf_df["alt_grch38"], vcf_df["ref_grch38"]
     )
     vcf_df["alt_grch37"] = np.where(
-        vcf_df["SwappedAlleles"], vcf_df["ref_grch38"], vcf_df["alt_grch38"]
+        swapped, vcf_df["ref_grch38"], vcf_df["alt_grch38"]
     )
 
     # Remove the 'chr' prefix from the chromosome names
@@ -222,8 +221,10 @@ def merge_dataframes(
         print("All rows have GRCh38 liftover information.")
 
     # Keep only rows with liftover information
-    liftover_rows = merged_df[~no_liftover]
-    liftover_rows["pos_grch38"] = liftover_rows["pos_grch38"].astype(int)
+    liftover_rows = merged_df[~no_liftover].copy()
+    liftover_rows.loc[:, "pos_grch38"] = liftover_rows["pos_grch38"].astype(
+        int
+    )
 
     if len(b37_genie_data) != len(liftover_rows):
         print(
@@ -232,14 +233,14 @@ def merge_dataframes(
             f" in the merged data with liftover: {len(liftover_rows)}"
         )
 
-    merged_df["grch38_description"] = (
-        merged_df["chrom_grch38"].astype(str)
+    liftover_rows.loc[:, "grch38_description"] = (
+        liftover_rows["chrom_grch38"].astype(str)
         + "_"
-        + merged_df["pos_grch38"].astype(str)
+        + liftover_rows["pos_grch38"].astype(str)
         + "_"
-        + merged_df["ref_grch38"].astype(str)
+        + liftover_rows["ref_grch38"].astype(str)
         + "_"
-        + merged_df["alt_grch38"].astype(str)
+        + liftover_rows["alt_grch38"].astype(str)
     )
 
     return liftover_rows
@@ -267,6 +268,8 @@ def main():
         genie_data_with_sample_info
     )
 
+    if not os.path.exists(args.vcf):
+        raise FileNotFoundError(f"VCF file {args.vcf} does not exist.")
     vcf_df = read_vcf_to_df(args.vcf)
     merged_df = merge_dataframes(genie_data_sample_info_unique_key, vcf_df)
     merged_df.to_csv(args.output, sep="\t", index=False)

@@ -1,4 +1,6 @@
+import os
 import pandas as pd
+import pysam
 import json
 import sys
 
@@ -110,3 +112,33 @@ def read_in_json(json_file: str) -> list:
     except Exception as err:
         print(f"Error reading JSON file {json_file}: {err}")
         sys.exit(1)
+
+
+def read_in_fasta(filename):
+    """
+    Read in FASTA to pysam.FastaFile object
+
+    Parameters
+    ----------
+    filename : str
+        path to FASTA file
+
+    Returns
+    -------
+    pysam.FastaFile
+        FASTA file as pysam object
+
+    Raises
+    ------
+    FileNotFoundError
+        If FASTA file does not exist
+    ValueError
+        If FASTA file is not in the correct format
+    """
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"FASTA file not found: {filename}")
+    try:
+        fasta = pysam.FastaFile(filename)
+        return fasta
+    except ValueError as err:
+        raise ValueError(f"Invalid FASTA format: {err}") from err
