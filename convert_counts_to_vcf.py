@@ -169,6 +169,9 @@ def generate_info_field_header_info(genie_counts):
                     ),
                 }
             )
+        # Skip this as it's already in CHROM, POS, REF, ALT
+        elif column == "grch38_description":
+            continue
         else:
             info_fields.append(
                 {
@@ -286,6 +289,10 @@ def write_variants_to_vcf(
         vcf_out.write(record)
 
     vcf_out.close()
+    try:
+        fasta.close()
+    except Exception as e:
+        print(f"Error closing FASTA file: {e}")
 
 
 def main():

@@ -127,11 +127,12 @@ def read_vcf_to_df(vcf_file: str) -> pd.DataFrame:
     # If the alleles were swapped during liftover (indicated by the
     # SwappedAlleles INFO field), take the alt allele in GRCh37 as the ref
     # allele and vice versa
+    swapped = vcf_df["SwappedAlleles"].fillna(False).astype(bool)
     vcf_df["ref_grch37"] = np.where(
-        vcf_df["SwappedAlleles"], vcf_df["alt_grch38"], vcf_df["ref_grch38"]
+        swapped, vcf_df["alt_grch38"], vcf_df["ref_grch38"]
     )
     vcf_df["alt_grch37"] = np.where(
-        vcf_df["SwappedAlleles"], vcf_df["ref_grch38"], vcf_df["alt_grch38"]
+        swapped, vcf_df["ref_grch38"], vcf_df["alt_grch38"]
     )
 
     # Remove the 'chr' prefix from the chromosome names
@@ -220,8 +221,10 @@ def merge_dataframes(
         print("All rows have GRCh38 liftover information.")
 
     # Keep only rows with liftover information
-    liftover_rows = merged_df[~no_liftover]
-    liftover_rows["pos_grch38"] = liftover_rows["pos_grch38"].astype(int)
+    liftover_rows = merged_df[~no_liftover].copy()
+    liftover_rows.loc[:, "pos_grch38"] = liftover_rows["pos_grch38"].astype(
+        int
+    )
 
     if len(b37_genie_data) != len(liftover_rows):
         print(
@@ -230,7 +233,7 @@ def merge_dataframes(
             f" in the merged data with liftover: {len(liftover_rows)}"
         )
 
-    liftover_rows["grch38_description"] = (
+    liftover_rows.loc[:, "grch38_description"] = (
         liftover_rows["chrom_grch38"].astype(str)
         + "_"
         + liftover_rows["pos_grch38"].astype(str)
