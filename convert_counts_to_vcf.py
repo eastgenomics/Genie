@@ -1,10 +1,11 @@
 import argparse
-import os
 import pandas as pd
 import pysam
 import re
 
-from utils import read_in_to_df, read_in_json
+from tqdm import tqdm
+
+from utils import read_in_to_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Information required to convert variants to VCF description"
-            " and write out as CSV and VCF files"
+            " and write out as TSV and VCF files"
         )
     )
 
@@ -38,25 +39,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--info_fields",
-        required=True,
-        type=str,
-        help=(
-            "Path to JSON file with columns to be added as INFO fields in VCF"
-        ),
-    )
-
-    parser.add_argument(
-        "--output_csv",
-        required=True,
-        type=str,
-        help=(
-            "Name of output CSV file with aggregated counts and VCF-like"
-            " description"
-        ),
-    )
-
-    parser.add_argument(
         "--output_vcf",
         required=True,
         type=str,
@@ -66,148 +48,176 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def read_in_fasta(filename):
+def remove_disallowed_chars_from_columns(genie_data):
     """
-    Read in FASTA to pysam.FastaFile object
+    Remove characters that are not allowed in VCF INFO field names and values.
 
     Parameters
     ----------
-    filename : str
-        path to FASTA file
+    genie_data : pd.DataFrame
+        DataFrame containing variant counts and descriptions
 
     Returns
     -------
-    fasta : pysam.FastaFile
-        FASTA file as pysam object
-    Raises
-    ------
-    FileNotFoundError
-        If FASTA file does not exist
-    ValueError
-        If FASTA file is not in the correct format
+    genie_counts : pd.DataFrame
+        DataFrame with modified column names and values for VCF compatibility
     """
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"FASTA file not found: {filename}")
-    try:
-        fasta = pysam.FastaFile(filename)
-        return fasta
-    except ValueError as err:
-        raise ValueError(f"Invalid FASTA format: {err}") from err
+    # Convert . to underscore in column names
+    genie_data.columns = genie_data.columns.str.replace(r"\.", "_", regex=True)
 
-
-def convert_maf_like_variant_to_vcf_description(row, fasta):
-    """
-    Convert a row of data from MAF-like format to VCF-like format
-
-    Parameters
-    ----------
-    row : pd.Series
-        Row of data to convert
-    fasta : pysam.FastaFile
-        FASTA file as pysam object
-
-    Returns
-    -------
-    vcf_chrom : str
-        Chrom in VCF-like format
-    vcf_pos : int
-        Position in VCF-like format
-    vcf_ref : str
-        Reference allele in VCF-like format
-    vcf_alt : str
-        Alt allele in VCF-like format
-    """
-    # Set explicit datatypes to avoid any issues when querying
-    chrom, pos, ref, alt = (
-        str(row["Chromosome"]),
-        int(row["Start_Position"]),
-        str(row["Reference_Allele"]),
-        str(row["Tumor_Seq_Allele2"]),
+    # Remove commas, hyphens, whitespaces, and slashes from column names
+    # to make them compatible with VCF format
+    genie_data.columns = genie_data.columns.str.replace(
+        r"[\/\s,-]", "", regex=True
     )
 
-    # Set VCF-like values to original by default
-    vcf_chrom, vcf_pos, vcf_ref, vcf_alt = chrom, pos, ref, alt
-
-    # Replace ref and alt '-' or other weird chars with ""
-    ref = "" if re.fullmatch(r"[-?0]+", ref) else ref
-    alt = "" if re.fullmatch(r"[-?0]+", alt) else alt
-
-    # MAF coords are 1-based, pysam uses 0-based half-open intervals and
-    # for deletions we want the base before the start, so needs pos - 2
-    # https://pysam.readthedocs.io/en/latest/api.html#pysam.FastaFile.fetch
-    ref_seq = ""
-    ref_seq = fasta.fetch(
-        chrom, max(0, pos - 2), pos - 1 + max(1, len(ref))
-    ).upper()
-    if not ref_seq:
-        print(
-            "No reference sequence found in FASTA for"
-            f" {chrom}-{pos}-{ref}-{alt}"
+    if "Consequence" in genie_data.columns:
+        # Replace commas with '&' in the 'Consequence' column
+        # to make it compatible with VCF format
+        genie_data["Consequence"] = genie_data["Consequence"].str.replace(
+            ",", "&"
         )
 
-    # It's an indel
-    if (len(ref) == 0) or (len(alt) == 0):
-        prefix_bp = ref_seq[0]
-        # For simple insertions, pos is already position of preceding bp
-        if ref == "" and len(ref_seq) > 0:
-            prefix_bp = ref_seq[1]
-            vcf_ref = prefix_bp
-            vcf_pos = pos
-            vcf_alt = prefix_bp + alt
-        # It's a deletion - we need to remove 1 from position
-        else:
-            vcf_ref = prefix_bp + ref
-            vcf_alt = prefix_bp
-            vcf_pos = pos - 1
+    return genie_data
 
-    # For non-indels, verify ref allele
-    else:
-        ref_from_fasta = ref_seq[1 : len(ref) + 1]
-        if ref != ref_from_fasta:
-            print(
-                f"Reference mismatch for {chrom}-{pos}-{ref}-{alt} -"
-                f" {ref_from_fasta} found in FASTA"
+
+def camel_case_to_spaces(text):
+    """
+    Replace camel case in a string with spaces, while preserving 'CDS' as a whole word
+
+    Parameters
+    ----------
+    text : str
+        Input string with camel case
+
+    Returns
+    -------
+    str
+        String with spaces instead of camel case
+    """
+    # Protect 'CDS' with a placeholder
+    text = text.replace("CDS", "___cds___")
+
+    # Insert spaces between camel case words
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", text)
+
+    # Restore 'CDS' and ensure space before it
+    text = text.replace("___cds___", "CDS")
+    text = re.sub(r"(?<! )CDS", r" CDS", text)
+
+    return text
+
+
+def generate_info_field_header_info(genie_counts):
+    """
+    Generate INFO field headers for the VCF file based on the genie_counts DataFrame
+
+    Parameters
+    ----------
+    genie_counts : pd.DataFrame
+        DataFrame containing variant counts and descriptions
+
+    Returns
+    -------
+    info_fields : list
+        List of dictionaries with INFO field names and descriptions
+    """
+    info_fields = []
+    for column in genie_counts.columns:
+        # If it's a count, we want to add it as an int and write which
+        # count type it is and whether all cancers or specific cancer type
+        if "count" in column.lower():
+            parts = column.split("_")
+            # Skip malformed columns
+            if len(parts) < 2:
+                print("Skipping malformed column:", column)
+                continue
+            count_type_description = camel_case_to_spaces(parts[0])
+            cancer_type_description = camel_case_to_spaces(parts[1])
+            info_fields.append(
+                {
+                    "id": column,
+                    "number": 1,
+                    "type": "Integer",
+                    "description": (
+                        f"{count_type_description} count in"
+                        f" {cancer_type_description} cancer"
+                    ),
+                }
+            )
+        # If it's the Genie description or grch37_norm then write what
+        # these actually are
+        elif column == "Genie_description":
+            info_fields.append(
+                {
+                    "id": "Genie_description",
+                    "number": 1,
+                    "type": "String",
+                    "description": (
+                        "Original GRCh37 Genie description(s) of the variant"
+                    ),
+                }
+            )
+        elif column == "grch37_norm":
+            info_fields.append(
+                {
+                    "id": "grch37_norm",
+                    "number": 1,
+                    "type": "String",
+                    "description": (
+                        "GRCh37 normalized description of the variant"
+                    ),
+                }
+            )
+        # Skip this as it's already in CHROM, POS, REF, ALT
+        elif column == "grch38_description":
+            continue
+        else:
+            info_fields.append(
+                {
+                    "id": column,
+                    "number": 1,
+                    "type": "String",
+                    "description": f"{column} from Genie data",
+                }
             )
 
-    return vcf_chrom, vcf_pos, vcf_ref, vcf_alt
+    return info_fields
 
 
-def convert_to_vcf_representation(genie_count_data, fasta):
+def create_field_converter_dict(info_fields):
     """
-    Make new columns with the VCF-like description for chrom, pos,
-    ref and alt in GRCh37
+    Create a dictionary mapping field names to conversion functions
 
     Parameters
     ----------
-    genie_count_data : pd.DataFrame
-        Genie data with one row per variant and count info
-    fasta : pysam.FastaFile
-        FASTA file as pysam object
+    info_fields : list
+        List of dictionaries with INFO field names and descriptions
 
     Returns
     -------
-    genie_count_data : pd.DataFrame
-        Genie data with one row per variant and count info, with new columns
-        chrom_vcf, pos_vcf, ref_vcf and alt_vcf
+    dict
+        Dictionary mapping field names to conversion functions
     """
-    genie_count_data[["chrom_vcf", "pos_vcf", "ref_vcf", "alt_vcf"]] = (
-        genie_count_data.apply(
-            lambda row: pd.Series(
-                convert_maf_like_variant_to_vcf_description(row, fasta)
-            ),
-            axis=1,
-        )
-    )
+    field_converters = {}
+    for field in info_fields:
+        field_name = field["id"]
+        field_type = field.get("type")
+        converter = {
+            "String": str,
+            "Character": str,
+            "Integer": int,
+            "Float": float,
+            "Flag": lambda x: x,
+        }.get(field_type)
+        if converter:
+            field_converters[field_name] = converter
 
-    genie_count_data["Consequence"] = genie_count_data[
-        "Consequence"
-    ].str.replace(",", "&")
-
-    return genie_count_data
+    return field_converters
 
 
 def write_variants_to_vcf(
-    genie_counts_vcf_description, output_vcf, fasta, info_fields
+    genie_counts, output_vcf, fasta, info_fields, field_converters
 ):
     """
     Write out the dataframe (with VCF-like description) to a VCF file
@@ -215,9 +225,9 @@ def write_variants_to_vcf(
 
     Parameters
     ----------
-    genie_counts_vcf_description : pd.DataFrame
-        Dataframe with one row per variant and count info and columns with
-        VCF-like description
+    genie_counts : pd.DataFrame
+        Dataframe with one row per variant with counts and all other
+        information aggregated per variant
     output_vcf : str
         Name of output VCF file
     fasta : pysam.FastaFile
@@ -225,92 +235,88 @@ def write_variants_to_vcf(
     info_fields : list
         List of dictionaries with INFO field names and descriptions
         to be added to the VCF file
+    field_converters : dict
+        Dictionary mapping INFO field names to conversion functions
     """
+    # Set up VCF header with the required fields
     header = pysam.VariantHeader()
     header.add_line("##fileformat=VCFv4.2")
     for contig in fasta.references:
         header.add_line(
             f"##contig=<ID={contig},length={fasta.get_reference_length(contig)}>"
         )
-    header.formats.add("GT", "1", "String", "Genotype")
     for field in info_fields:
         header.info.add(
             field["id"], field["number"], field["type"], field["description"]
         )
-    header.info.add(
-        "Genie_description",
-        "1",
-        "String",
-        "Original variant info from Genie",
-    )
 
+    # Write out variants as new records
     vcf_out = pysam.VariantFile(output_vcf, "w", header=header)
-    # For each original variant, write new variant record with all INFO
-    # fields specified in the JSON file
-    # Take 1 away from start due to differences in Pysam representation
-    for _, row in genie_counts_vcf_description.iterrows():
+
+    print("Writing variants to VCF file...")
+    for row in tqdm(
+        genie_counts.itertuples(index=False), total=genie_counts.shape[0]
+    ):
+        # Split out chromosome, position, reference, and alternate alleles
+        try:
+            chrom, pos, ref, alt = row.grch38_description.split("_")
+        except (AttributeError, ValueError) as e:
+            print(f"Invalid grch38_description format: {e}")
+            continue
+
+        # Format the INFO field values according to the converters
+        formatted_info_fields = {}
+        for field_name, converter in field_converters.items():
+            value = getattr(row, field_name, None)
+            if pd.notna(value):
+                try:
+                    formatted_info_fields[field_name] = converter(value)
+                except Exception as err:
+                    print(f"Error converting field {field_name}: {err}")
+
+        # For each variant, write new variant record with all INFO fields
+        # Take 1 away from start due to differences in Pysam representation
         record = vcf_out.new_record(
-            contig=str(row["chrom_vcf"]),
-            start=int(row["pos_vcf"]) - 1,
-            alleles=(row["ref_vcf"], row["alt_vcf"]),
+            contig=str(chrom),
+            start=int(pos) - 1,
+            alleles=(ref, alt),
             id=".",
             qual=None,
             filter=None,
+            info=formatted_info_fields,
         )
-        for field in info_fields:
-            field_name = field["column_name"]
-            if field_name in row and pd.notna(row[field_name]):
-                field_type = field.get("type")
-                type_map = {
-                    "String": str,
-                    "Character": str,
-                    "Integer": int,
-                    "Float": float,
-                    "Flag": lambda x: x,
-                }
-                converter = type_map.get(field_type)
-                if converter:
-                    try:
-                        field_value = converter(row[field_name])
-                        record.info[field["id"]] = field_value
-                    except Exception as err:
-                        print(f"Error converting field {field_name}: {err}")
-                else:
-                    print(
-                        f"Unsupported field type for field {field_name}: "
-                        f"{field_type}. Skipping"
-                    )
-
-        # Add in original Genie GRCh37 chrom-pos-ref-alt
-        orig_coord_str = f"{row['Chromosome']}_{row['Start_Position']}_{row['Reference_Allele']}_{row['Tumor_Seq_Allele2']}"
-        record.info["Genie_description"] = orig_coord_str
 
         vcf_out.write(record)
 
     vcf_out.close()
-    fasta.close()
+    try:
+        fasta.close()
+    except Exception as e:
+        print(f"Error closing FASTA file: {e}")
 
 
 def main():
     args = parse_args()
     genie_counts = read_in_to_df(
         args.input,
-        sep=",",
+        sep="\t",
         header=0,
         dtype={
-            "Entrez_Gene_Id": "Int64",
             "Start_Position": "Int64",
         },
     )
-    fasta = read_in_fasta(args.fasta)
-    genie_counts_vcf_desc = convert_to_vcf_representation(genie_counts, fasta)
-    genie_counts_vcf_desc.to_csv(
-        args.output_csv,
-        index=False,
+    fasta = read_in_fasta(filename=args.fasta)
+    genie_counts_renamed = remove_disallowed_chars_from_columns(genie_counts)
+    info_fields = generate_info_field_header_info(
+        genie_counts=genie_counts_renamed
     )
-    info_fields = read_in_json(args.info_fields)
+    converter_dict = create_field_converter_dict(info_fields=info_fields)
     write_variants_to_vcf(
-        genie_counts_vcf_desc, args.output_vcf, fasta, info_fields
+        genie_counts=genie_counts_renamed,
+        output_vcf=args.output_vcf,
+        fasta=fasta,
+        info_fields=info_fields,
+        field_converters=converter_dict,
     )
 
 

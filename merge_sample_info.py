@@ -53,6 +53,8 @@ def merge_dataframes(
         name of column which is common to both dataframes in first df
     right_on : str
         name of column which is common to both dataframes in second df
+    how: str
+        type of merge to perform (e.g., 'inner', 'outer', 'left', 'right')
 
     Returns
     -------
@@ -68,15 +70,15 @@ def merge_dataframes(
         raise RuntimeError(f"Error merging dataframes: {err}") from err
 
 
-def perform_merge_checks(genie_data, genie_with_sample_ids):
+def perform_merge_checks(original_data, merged_data):
     """
     Perform checks on merged dataframe
 
     Parameters
     ----------
-    genie_data: pd.DataFrame
+    original_data : pd.DataFrame
         original dataframe
-    genie_with_sample_ids : pd.DataFrame
+    merged_data : pd.DataFrame
         merged dataframe
 
     Raises
@@ -84,17 +86,15 @@ def perform_merge_checks(genie_data, genie_with_sample_ids):
     ValueError
         If the number of rows in the input and output data do not match
     """
-    print(f"\nRows in input data: {len(genie_data)}")
+    print(f"\nRows in input data: {len(original_data)}")
 
-    print(f"Rows in output data: {len(genie_with_sample_ids)}")
-    if len(genie_data) != len(genie_with_sample_ids):
+    print(f"Rows in output data: {len(merged_data)}")
+    if len(original_data) != len(merged_data):
         raise ValueError(
             "Number of rows in input and output data do not match"
         )
     print("\nRows found with no patient ID after merging:")
-    rows_with_na = genie_with_sample_ids[
-        genie_with_sample_ids["PATIENT_ID"].isna()
-    ]
+    rows_with_na = merged_data[merged_data["PATIENT_ID"].isna()]
     if not rows_with_na.empty:
         print(rows_with_na)
     else:
@@ -106,6 +106,14 @@ def main():
     genie_data = read_in_to_df(
         args.input_maf,
         header=0,
+        dtype={
+            "Hugo_Symbol": "str",
+            "Chromosome": "str",
+            "Start_Position": "Int64",
+            "Reference_Allele": "str",
+            "Tumor_Seq_Allele2": "str",
+            "Entrez_Gene_Id": "Int64",
+        },
     )
     sample_cancer_info = read_in_to_df(
         args.clinical_info,
