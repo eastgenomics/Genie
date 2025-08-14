@@ -127,10 +127,13 @@ def generate_info_field_header_info(genie_counts):
         # If it's a count, we want to add it as an int and write which
         # count type it is and whether all cancers or specific cancer type
         if "count" in column.lower():
-            count_type_description = camel_case_to_spaces(column.split("_")[0])
-            cancer_type_description = camel_case_to_spaces(
-                column.split("_")[1]
-            )
+            parts = column.split("_")
+            # Skip malformed columns
+            if len(parts) < 2:
+                print("Skipping malformed column:", column)
+                continue
+            count_type_description = camel_case_to_spaces(parts[0])
+            cancer_type_description = camel_case_to_spaces(parts[1])
             info_fields.append(
                 {
                     "id": column,
@@ -253,9 +256,7 @@ def write_variants_to_vcf(
     ):
         # Split out chromosome, position, reference, and alternate alleles
         try:
-            chrom, pos, ref, alt = getattr(row, "grch38_description").split(
-                "_"
-            )
+            chrom, pos, ref, alt = row.grch38_description.split("_")
         except (AttributeError, ValueError) as e:
             print(f"Invalid grch38_description format: {e}")
             continue

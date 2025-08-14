@@ -3,11 +3,8 @@ import numpy as np
 import os
 import pandas as pd
 import pysam
-import warnings
 
 from utils import read_in_to_df
-
-warnings.filterwarnings("ignore")
 
 
 def parse_args() -> argparse.Namespace:
