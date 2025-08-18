@@ -5,34 +5,26 @@ import pandas as pd
 from utils.file_io import read_in_to_df, read_txt_file_to_list
 from utils.aggregation import (
     calculate_unique_patient_counts,
-    calculate_unique_patients_haemonc_cancers,
-    get_haemonc_cancer_rows,
     create_df_with_one_row_per_variant,
 )
 from utils.counting import (
     count_nucleotide_change_all_cancers,
     count_nucleotide_change_per_cancer_type,
-    count_nucleotide_change_haemonc_cancers,
     count_amino_acid_change_all_cancers,
     count_amino_acid_change_per_cancer_type,
-    count_amino_acid_change_haemonc_cancers,
     get_truncating_variants,
     count_frameshift_truncating_and_nonsense_all_cancers,
     count_frameshift_truncating_and_nonsense_per_cancer_type,
-    count_frameshift_truncating_and_nonsense_haemonc_cancers,
     get_inframe_deletions,
     add_deletion_positions,
     extract_position_affected,
     count_nested_inframe_deletions_all_cancers,
     count_nested_inframe_deletions_per_cancer_type,
-    count_nested_inframe_deletions_haemonc_cancers,
 )
 from utils.merging import (
     multi_merge,
     merge_truncating_variants_counts,
-    merge_truncating_variant_counts_haemonc,
     merge_inframe_deletions_with_counts,
-    merge_inframe_deletions_haemonc_counts,
     reorder_final_columns,
 )
 
@@ -108,9 +100,13 @@ def main():
     )
 
     columns_to_aggregate = read_txt_file_to_list(args.columns_to_aggregate)
+    if args.haemonc_cancer_types:
+        haemonc_cancers = read_txt_file_to_list(args.haemonc_cancer_types)
+    else:
+        haemonc_cancers = None
 
-    (patient_total, per_cancer_patient_total) = (
-        calculate_unique_patient_counts(genie_data)
+    (patient_total, per_cancer_patient_total, haemonc_cancer_patient_total) = (
+        calculate_unique_patient_counts(genie_data, haemonc_cancers)
     )
 
     one_row_per_variant_agg = create_df_with_one_row_per_variant(
@@ -208,84 +204,11 @@ def main():
         inframe_deletions_count_per_cancer=inframe_deletions_count_per_cancer,
     )
 
-    if args.haemonc_cancer_types:
-        haemonc_cancers = read_txt_file_to_list(args.haemonc_cancer_types)
-        haemonc_data = get_haemonc_cancer_rows(
-            df=genie_data,
-            haemonc_cancers=haemonc_cancers,
-        )
-        haemonc_cancer_patient_total = (
-            calculate_unique_patients_haemonc_cancers(
-                haemonc_rows=haemonc_data
-            )
-        )
-
-        nucleotide_change_counts_haemonc = (
-            count_nucleotide_change_haemonc_cancers(
-                haemonc_data=haemonc_data,
-                genie_data=genie_data,
-                haemonc_patient_total=haemonc_cancer_patient_total,
-            )
-        )
-        merged_nt_haemonc_counts = multi_merge(
-            base_df=all_counts_merged,
-            merge_dfs=[nucleotide_change_counts_haemonc],
-            on="grch38_description",
-            how="left",
-        )
-        amino_acid_change_counts_haemonc = (
-            count_amino_acid_change_haemonc_cancers(
-                haemonc_data=haemonc_data,
-                genie_data=genie_data,
-                haemonc_patient_total=haemonc_cancer_patient_total,
-            )
-        )
-        merged_aa_haemonc_counts = pd.merge(
-            merged_nt_haemonc_counts,
-            amino_acid_change_counts_haemonc,
-            on=["Hugo_Symbol", "HGVSp"],
-            how="left",
-        )
-        truncating_variants_haemonc = get_truncating_variants(df=haemonc_data)
-        truncating_variants_haemonc_position = extract_position_affected(
-            df=truncating_variants_haemonc
-        )
-
-        frameshift_counts_haemonc = (
-            count_frameshift_truncating_and_nonsense_haemonc_cancers(
-                df=truncating_variants_haemonc_position,
-                patient_total=haemonc_cancer_patient_total,
-            )
-        )
-
-        merged_frameshift_ho = merge_truncating_variant_counts_haemonc(
-            merged_aa_haemonc_counts=merged_aa_haemonc_counts,
-            truncating_plus_position=truncating_plus_position,
-            frameshift_counts_haemonc=frameshift_counts_haemonc,
-        )
-
-        inframe_deletions_haemonc = get_inframe_deletions(df=haemonc_data)
-        inframe_deletions_haemonc_positions = add_deletion_positions(
-            inframe_deletions_haemonc
-        )
-        inframe_deletions_count_haemonc_cancers = (
-            count_nested_inframe_deletions_haemonc_cancers(
-                inframe_deletions_df=inframe_deletions_haemonc_positions,
-                patient_total=haemonc_cancer_patient_total,
-            )
-        )
-
-        all_counts_merged = merge_inframe_deletions_haemonc_counts(
-            inframe_deletions=inframe_deletions_with_positions,
-            inframe_deletions_count_haemonc_cancers=inframe_deletions_count_haemonc_cancers,
-            merged_frameshift_ho=merged_frameshift_ho,
-        )
-
     final_df = reorder_final_columns(
         all_counts_merged,
         patient_total,
         per_cancer_patient_total,
-        haemonc_cancer_patient_total if args.haemonc_cancer_types else None,
+        haemonc_cancer_patient_total,
     )
 
     final_df.to_csv(

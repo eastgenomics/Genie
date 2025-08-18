@@ -1,14 +1,20 @@
 import pandas as pd
 
 
-def calculate_unique_patient_counts(df: pd.DataFrame):
+def calculate_unique_patient_counts(
+    df: pd.DataFrame, haemonc_cancers: list = None
+):
     """
-    Calculate the number of unique patients overall and per cancer type.
+    Calculate the number of unique patients overall, per cancer type and
+    (optionally) for haemonc cancer types.
 
     Parameters
     ----------
     df : pd.DataFrame
         Input dataframe with columns PATIENT_ID, CANCER_TYPE
+    haemonc_cancers : list, optional
+        List of haemonc cancer types to filter by. If provided, will calculate
+        unique patient counts for these cancer types only.
 
     Returns
     -------
@@ -17,6 +23,8 @@ def calculate_unique_patient_counts(df: pd.DataFrame):
     unique_patient_n_per_cancer: dict
         Dictionary with cancer types as keys and number of unique patients
         as values
+    haemonc_patient_n : int or None
+        Total number of unique patients in haemonc cancer types, if applicable
     """
     total_patient_n = df["PATIENT_ID"].nunique()
 
@@ -24,46 +32,13 @@ def calculate_unique_patient_counts(df: pd.DataFrame):
         df.groupby("CANCER_TYPE")["PATIENT_ID"].nunique().to_dict()
     )
 
-    return total_patient_n, unique_patient_n_per_cancer
+    haemonc_patient_n = None
+    if haemonc_cancers is not None:
+        haemonc_patient_n = df[df["CANCER_TYPE"].isin(haemonc_cancers)][
+            "PATIENT_ID"
+        ].nunique()
 
-
-def get_haemonc_cancer_rows(df: pd.DataFrame, haemonc_cancers: list):
-    """
-    Get rows for haemonc cancer types from the DataFrame.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe with columns CANCER_TYPE
-    haemonc_cancers : list
-        List of haemonc cancer types to filter by
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with rows for haemonc cancer types
-    """
-    return df[df["CANCER_TYPE"].isin(haemonc_cancers)].copy()
-
-
-def calculate_unique_patients_haemonc_cancers(
-    haemonc_rows: pd.DataFrame,
-):
-    """
-    Count unique patients in haemonc cancer types.
-
-    Parameters
-    ----------
-    haemonc_rows : pd.DataFrame
-        Input dataframe with rows relevant to haemonc_cancers
-
-    Returns
-    -------
-    int
-        Total number of unique patients in haemonc cancer types
-    """
-
-    return haemonc_rows["PATIENT_ID"].nunique()
+    return total_patient_n, unique_patient_n_per_cancer, haemonc_patient_n
 
 
 def create_df_with_one_row_per_variant(
@@ -93,26 +68,3 @@ def create_df_with_one_row_per_variant(
     )
 
     return aggregated_df
-
-
-def deduplicate_variant_by_patient_haemonc_cancers(haemonc_rows: pd.DataFrame):
-    """
-    Remove multiple instances of the same variant (GRCh38 description) for the
-    same patient in haemonc cancer types.
-
-    Parameters
-    ----------
-    haemonc_rows : pd.DataFrame
-        Input dataframe with rows for haemonc cancer types
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with unique variants per patient and variant description
-        in haemonc cancer types
-    """
-    df_deduplicated_by_patient_haemonc = haemonc_rows.drop_duplicates(
-        subset=["PATIENT_ID", "grch38_description"], keep="first"
-    )
-
-    return df_deduplicated_by_patient_haemonc
