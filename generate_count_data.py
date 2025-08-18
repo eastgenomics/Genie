@@ -6,16 +6,16 @@ from utils.file_io import read_in_to_df, read_txt_file_to_list
 from utils.aggregation import (
     calculate_unique_patient_counts,
     create_df_with_one_row_per_variant,
+    get_truncating_variants,
+    get_inframe_deletions,
 )
 from utils.counting import (
-    count_nucleotide_change_all_cancers,
-    count_nucleotide_change_per_cancer_type,
+    count_same_nucleotide_change_all_cancers,
+    count_same_nucleotide_change_per_cancer_type,
     count_amino_acid_change_all_cancers,
     count_amino_acid_change_per_cancer_type,
-    get_truncating_variants,
     count_frameshift_truncating_and_nonsense_all_cancers,
     count_frameshift_truncating_and_nonsense_per_cancer_type,
-    get_inframe_deletions,
     add_deletion_positions,
     extract_position_affected,
     count_nested_inframe_deletions_all_cancers,
@@ -114,12 +114,14 @@ def main():
         columns_to_aggregate=columns_to_aggregate,
     )
 
-    nucleotide_change_counts_all_cancer = count_nucleotide_change_all_cancers(
-        df=genie_data, unique_patient_total=patient_total
+    nucleotide_change_counts_all_cancer = (
+        count_same_nucleotide_change_all_cancers(
+            df=genie_data, unique_patient_total=patient_total
+        )
     )
 
     nucleotide_change_counts_per_cancer = (
-        count_nucleotide_change_per_cancer_type(
+        count_same_nucleotide_change_per_cancer_type(
             df=genie_data,
             unique_patients_per_cancer=per_cancer_patient_total,
         )

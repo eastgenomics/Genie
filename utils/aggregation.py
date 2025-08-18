@@ -68,3 +68,52 @@ def create_df_with_one_row_per_variant(
     )
 
     return aggregated_df
+
+
+def get_truncating_variants(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract rows of truncating variants from the Genie data.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input Genie MAF data
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with truncating variants
+    """
+    truncating = df["Variant_Classification"].isin(
+        [
+            "Frame_Shift_Del",
+            "Frame_Shift_Ins",
+            "Nonsense_Mutation",
+        ]
+    ) & (df["HGVSp"].str.contains("Ter", na=False))
+
+    return df[truncating].copy()
+
+
+def get_inframe_deletions(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Get inframe deletions from the DataFrame
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the Genie data
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with inframe deletion variants
+    """
+    inframe_deletions = df[
+        df["Variant_Classification"] == "In_Frame_Del"
+    ].copy()
+
+    # Remove any where HGVSc is NaN as we won't get positions from these
+    inframe_deletions = inframe_deletions[inframe_deletions["HGVSc"].notna()]
+
+    return inframe_deletions
