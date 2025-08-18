@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--output_vcf",
+        "--output",
         required=True,
         type=str,
         help="Name of output VCF file",
@@ -315,7 +315,7 @@ def main():
     converter_dict = create_field_converter_dict(info_fields=info_fields)
     write_variants_to_vcf(
         genie_counts=genie_counts_renamed,
-        output_vcf=args.output_vcf,
+        output_vcf=args.output,
         fasta=fasta,
         info_fields=info_fields,
         field_converters=converter_dict,

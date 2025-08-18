@@ -27,26 +27,43 @@ def calculate_unique_patient_counts(df: pd.DataFrame):
     return total_patient_n, unique_patient_n_per_cancer
 
 
+def get_haemonc_cancer_rows(df: pd.DataFrame, haemonc_cancers: list):
+    """
+    Get rows for haemonc cancer types from the DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with columns CANCER_TYPE
+    haemonc_cancers : list
+        List of haemonc cancer types to filter by
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with rows for haemonc cancer types
+    """
+    return df[df["CANCER_TYPE"].isin(haemonc_cancers)].copy()
+
+
 def calculate_unique_patients_haemonc_cancers(
-    df: pd.DataFrame, haemonc_cancer_types: list
+    haemonc_rows: pd.DataFrame,
 ):
     """
     Count unique patients in haemonc cancer types.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        Input dataframe with columns PATIENT_ID, CANCER_TYPE
-    haemonc_cancer_types : list
-        List of haemonc cancer types to filter by
+    haemonc_rows : pd.DataFrame
+        Input dataframe with rows relevant to haemonc_cancers
 
     Returns
     -------
     int
         Total number of unique patients in haemonc cancer types
     """
-    haemonc_data = df[df["CANCER_TYPE"].isin(haemonc_cancer_types)].copy()
-    return haemonc_data["PATIENT_ID"].nunique()
+
+    return haemonc_rows["PATIENT_ID"].nunique()
 
 
 def create_df_with_one_row_per_variant(
@@ -125,20 +142,15 @@ def deduplicate_variant_by_patient_and_cancer_type(df: pd.DataFrame):
     return df_deduplicated_by_pt_and_cancer
 
 
-def deduplicate_variant_by_patient_haemonc_cancers(
-    df: pd.DataFrame, haemonc_cancer_types: list
-):
+def deduplicate_variant_by_patient_haemonc_cancers(haemonc_rows: pd.DataFrame):
     """
     Remove multiple instances of the same variant (GRCh38 description) for the
     same patient in haemonc cancer types.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        Input dataframe with columns PATIENT_ID, grch38_description,
-        CANCER_TYPE
-    haemonc_cancer_types : list
-        List of haemonc cancer types to filter by
+    haemonc_rows : pd.DataFrame
+        Input dataframe with rows for haemonc cancer types
 
     Returns
     -------
@@ -146,8 +158,7 @@ def deduplicate_variant_by_patient_haemonc_cancers(
         DataFrame with unique variants per patient and variant description
         in haemonc cancer types
     """
-    df_haemonc = df[df["CANCER_TYPE"].isin(haemonc_cancer_types)].copy()
-    df_deduplicated_by_patient_haemonc = df_haemonc.drop_duplicates(
+    df_deduplicated_by_patient_haemonc = haemonc_rows.drop_duplicates(
         subset=["PATIENT_ID", "grch38_description"], keep="first"
     )
 

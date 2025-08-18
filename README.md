@@ -1,5 +1,5 @@
 ## Generate counts from GENIE Cohort data
-This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to UK Somatic Variant Intepretation Guidelines (S-VIG).
+This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to [UK Somatic Variant Intepretation Guidelines (S-VIG)](https://www.acgs.uk.com/media/12831/svig-uk_guidelines_v10_-_post-acgs_ratification_final_submit01.pdf) and its [supplementary information](https://www.acgs.uk.com/media/12832/svig-uk-supplementary-material-post-acgs-ratification-final.pdf).
 
 ### Merge sample info
 The clinical data (patient IDs, cancer types etc.) must be merged into the MAF data using `Tumor_Sample_Barcode` from the MAF data and `SAMPLE_ID` from the clinical data in order to generate patient counts for each variant later.
@@ -19,7 +19,7 @@ Example command:
 python convert_raw_maf_to_vcf.py \
   --input data_mutations_extended.txt \
   --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
-  --output_vcf data_mutations_extended.vcf
+  --output data_mutations_extended.vcf
 ```
 Note: the VCF should then be sorted and normalised with bcftools and lifted over to GRCh38 with Picard LiftoverVcf.
 
@@ -35,11 +35,31 @@ python add_grch38_liftover.py \
 ```
 
 ### Generate count data
+This script generates counts of how many unique patients each variant is present in, with one row per unique variant in the output TSV. The counts types include:
+- The exact nucleotide change (all variants)
+- The same amino acid change (all variants with HGVSp data present)
+- The number of patients with frameshift (truncating) or nonsense variants at that position or downstream in the same gene. This is only present for the following variant types, where `Ter` is present in the HGVSp string:
+    - `Frame_Shift_Del`
+    - `Frame_Shift_Ins`
+    - `Nonsense_Mutation`
+- The number of patients with inframe deletions which cover the same CDS positions or are nested within the deletion.
+    - These counts are only present for the `In_Frame_Del` variant type.
+
 Example command:
 ```
 python generate_count_data.py \
   --input data_mutations_extended_clinical_info_GRCh38.txt \
   --columns_to_aggregate columns_to_aggregate.txt \
-  --haemonc_cancer_types haemonc_cancer_types.txt \
+  --haemonc_cancer_types haemonc_cancer_types.txt (optional) \
   --output Genie_v17_GRCh38_counts.tsv
+```
+
+### Write counts to VCF
+The aggregated existing Genie fields and the count data are written out to VCF as INFO fields, with the GRCh38 liftover data used for CHROM, POS, REF and ALT.
+Example command:
+```
+python convert_counts_to_vcf.py \
+  --input Genie_v17_GRCh38_counts.tsv \
+  --fasta Homo_sapiens.GRCh38.dna.toplevel.fa.gz \
+  --output Genie_v17_GRCh38_counts.vcf
 ```

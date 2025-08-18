@@ -110,7 +110,7 @@ def count_nucleotide_change_haemonc_cancers(
         haemonc_data.groupby("grch38_description")["PATIENT_ID"]
         .nunique()
         .rename(
-            f"SameNucleotideChange.Haemonc_Count_N_{haemonc_patient_total}"
+            f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
         )
         .reset_index()
     )
@@ -337,26 +337,6 @@ def get_truncating_variants(df: pd.DataFrame) -> pd.DataFrame:
     ) & (df["HGVSp"].str.contains("Ter", na=False))
 
     return df[truncating].copy()
-
-
-def get_truncating_variants_haemonc_cancers(
-    df: pd.DataFrame, haemonc_cancers: list
-) -> pd.DataFrame:
-    """
-    Extract truncating variants in haemonc cancer types.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input Genie MAF data
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with truncating variants in haemonc cancer types
-    """
-    truncating = get_truncating_variants(df)
-    return truncating[truncating["CANCER_TYPE"].isin(haemonc_cancers)]
 
 
 def count_patients_with_variant_at_same_position_or_downstream(gene_group):
@@ -721,6 +701,40 @@ def count_nested_inframe_deletions_all_cancers(
         columns={
             "nested_patient_count": (
                 f"NestedInframeDeletionsPerCDS.Total_Count_N_{patient_total}"
+            )
+        }
+    )
+
+    return inframe_counts
+
+
+def count_nested_inframe_deletions_haemonc_cancers(
+    inframe_deletions_df: pd.DataFrame, patient_total: int
+) -> pd.DataFrame:
+    """
+    Count the number of unique patients with inframe deletions that are either
+    the same as or nested within the current deletion for all cancers.
+
+    Parameters
+    ----------
+    inframe_deletions_df : pd.DataFrame
+        DataFrame containing inframe deletions with patient information.
+    patient_total : int
+        Total number of unique patients in the dataset.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with counts of matching or nested inframe deletions.
+    """
+    inframe_counts = (
+        inframe_deletions_df.groupby("Hugo_Symbol")
+        .apply(count_patients_with_nested_deletions)
+        .reset_index()
+    ).rename(
+        columns={
+            "nested_patient_count": (
+                f"NestedInframeDeletionsPerCDS.Haemonc_Cancers_Count_N_{patient_total}"
             )
         }
     )
