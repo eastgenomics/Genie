@@ -95,53 +95,6 @@ def create_df_with_one_row_per_variant(
     return aggregated_df
 
 
-def deduplicate_variant_by_patient(df: pd.DataFrame):
-    """
-    Remove multiple instances of the same variant (GRCh38 description) for the
-    same patient.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe with columns PATIENT_ID, grch38_description
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with unique variants per patient and variant description
-    """
-    df_deduplicated_by_patient = df.drop_duplicates(
-        subset=["PATIENT_ID", "grch38_description"], keep="first"
-    )
-
-    return df_deduplicated_by_patient
-
-
-def deduplicate_variant_by_patient_and_cancer_type(df: pd.DataFrame):
-    """
-    Remove multiple instances of the same variant (GRCh38 description) for the
-    same patient and cancer type.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe with columns PATIENT_ID, grch38_description,
-        CANCER_TYPE
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with unique variants per patient, variant description and
-        cancer type
-    """
-    df_deduplicated_by_pt_and_cancer = df.drop_duplicates(
-        subset=["PATIENT_ID", "grch38_description", "CANCER_TYPE"],
-        keep="first",
-    )
-
-    return df_deduplicated_by_pt_and_cancer
-
-
 def deduplicate_variant_by_patient_haemonc_cancers(haemonc_rows: pd.DataFrame):
     """
     Remove multiple instances of the same variant (GRCh38 description) for the

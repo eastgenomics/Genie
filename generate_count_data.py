@@ -8,9 +8,6 @@ from utils.aggregation import (
     calculate_unique_patients_haemonc_cancers,
     get_haemonc_cancer_rows,
     create_df_with_one_row_per_variant,
-    deduplicate_variant_by_patient,
-    deduplicate_variant_by_patient_and_cancer_type,
-    deduplicate_variant_by_patient_haemonc_cancers,
 )
 from utils.counting import (
     count_nucleotide_change_all_cancers,
@@ -121,23 +118,13 @@ def main():
         columns_to_aggregate=columns_to_aggregate,
     )
 
-    deduplicated_by_patient = deduplicate_variant_by_patient(
-        df=genie_data,
-    )
-
-    deduplicated_by_patient_and_cancer = (
-        deduplicate_variant_by_patient_and_cancer_type(
-            df=deduplicated_by_patient
-        )
-    )
-
     nucleotide_change_counts_all_cancer = count_nucleotide_change_all_cancers(
         df=genie_data, unique_patient_total=patient_total
     )
 
     nucleotide_change_counts_per_cancer = (
         count_nucleotide_change_per_cancer_type(
-            df=deduplicated_by_patient_and_cancer,
+            df=genie_data,
             unique_patients_per_cancer=per_cancer_patient_total,
         )
     )
@@ -232,14 +219,10 @@ def main():
                 haemonc_rows=haemonc_data
             )
         )
-        deduplicate_patient_haemonc_cancers = (
-            deduplicate_variant_by_patient_haemonc_cancers(
-                haemonc_rows=haemonc_data
-            )
-        )
+
         nucleotide_change_counts_haemonc = (
             count_nucleotide_change_haemonc_cancers(
-                haemonc_data=deduplicate_patient_haemonc_cancers,
+                haemonc_data=haemonc_data,
                 genie_data=genie_data,
                 haemonc_patient_total=haemonc_cancer_patient_total,
             )
@@ -252,7 +235,7 @@ def main():
         )
         amino_acid_change_counts_haemonc = (
             count_amino_acid_change_haemonc_cancers(
-                haemonc_data=deduplicate_patient_haemonc_cancers,
+                haemonc_data=haemonc_data,
                 genie_data=genie_data,
                 haemonc_patient_total=haemonc_cancer_patient_total,
             )

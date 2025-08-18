@@ -11,7 +11,7 @@ def count_nucleotide_change_all_cancers(
     Parameters
     ----------
     df : pd.DataFrame
-        Input Genie MAF data deduplicated by variant and patient
+        Input Genie MAF data
     unique_patient_total : int
         Total number of unique patients in the dataset
 
@@ -23,7 +23,7 @@ def count_nucleotide_change_all_cancers(
     # Group by variant, count patients and add patient N to the column name
     nucleotide_change_counts = (
         df.groupby("grch38_description")
-        .agg({"PATIENT_ID": "count"})
+        .agg({"PATIENT_ID": "nunique"})
         .rename(
             columns={
                 "PATIENT_ID": (
@@ -60,7 +60,7 @@ def count_nucleotide_change_per_cancer_type(
     # per cancer type to the column name
     agg_df = (
         df.groupby(["grch38_description", "CANCER_TYPE"])
-        .agg(patient_count=("PATIENT_ID", "count"))
+        .agg(patient_count=("PATIENT_ID", "nunique"))
         .reset_index()
     )
 
@@ -155,7 +155,7 @@ def count_amino_acid_change_all_cancers(
     # patient N to the column name
     amino_acid_change_counts = (
         df.groupby(["Hugo_Symbol", "HGVSp"])
-        .agg({"PATIENT_ID": "count"})
+        .agg({"PATIENT_ID": "nunique"})
         .rename(
             columns={
                 "PATIENT_ID": (
@@ -194,7 +194,7 @@ def count_amino_acid_change_per_cancer_type(
     # Amino acid change per cancer type
     amino_acid_count_per_cancer = (
         df.groupby(["Hugo_Symbol", "HGVSp", "CANCER_TYPE"])
-        .agg(patient_count=("PATIENT_ID", "count"))
+        .agg(patient_count=("PATIENT_ID", "nunique"))
         .reset_index()
     )
 
