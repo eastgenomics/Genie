@@ -5,7 +5,7 @@ import re
 
 from tqdm import tqdm
 
-from utils import read_in_to_df, read_in_fasta
+from utils.file_io import read_in_to_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
@@ -133,15 +133,17 @@ def generate_info_field_header_info(genie_counts):
                 print("Skipping malformed column:", column)
                 continue
             count_type_description = camel_case_to_spaces(parts[0])
-            cancer_type_description = camel_case_to_spaces(parts[1])
+            cancer_type_description = camel_case_to_spaces(parts[1]).replace(
+                "Total", "All Cancers"
+            )
             info_fields.append(
                 {
                     "id": column,
                     "number": 1,
                     "type": "Integer",
                     "description": (
-                        f"{count_type_description} count in"
-                        f" {cancer_type_description} cancer"
+                        f"Number of patients with {count_type_description} in"
+                        f" {cancer_type_description}"
                     ),
                 }
             )

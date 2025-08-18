@@ -4,7 +4,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 
-from utils import read_in_json
+from utils.file_io import read_in_json
 
 
 def parse_args() -> argparse.Namespace:

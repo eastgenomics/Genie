@@ -4,7 +4,7 @@ import pysam
 import re
 
 from tqdm import tqdm
-from utils import read_in_to_df, read_in_fasta
+from utils.file_io import read_in_to_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
