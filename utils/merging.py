@@ -1,10 +1,5 @@
 import pandas as pd
 
-NUCLEOTIDE_KEYS = ["grch38_description"]
-AMINO_ACID_KEYS = ["Hugo_Symbol", "HGVSp"]
-TRUNCATING_KEYS = ["Hugo_Symbol", "CDS_position"]
-INFRAME_DELETION_KEYS = ["Hugo_Symbol", "del_start", "del_end"]
-
 
 def multi_merge(base_df, merge_dfs, on, how="left"):
     """
