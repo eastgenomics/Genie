@@ -114,6 +114,7 @@ def count_nucleotide_change_haemonc_cancers(
         )
         .reset_index()
     )
+
     # Ensure all variants are present, fill missing with zero
     all_variants = genie_data.drop_duplicates(subset="grch38_description")[
         "grch38_description"

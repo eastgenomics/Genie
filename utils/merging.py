@@ -71,6 +71,48 @@ def merge_truncating_variants_counts(
     return merged
 
 
+def merge_truncating_variant_counts_haemonc(
+    merged_aa_haemonc_counts: pd.DataFrame,
+    truncating_plus_position: pd.DataFrame,
+    frameshift_counts_haemonc: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Merge truncating variants with their counts for haemonc cancers.
+    Parameters
+    ----------
+    merged_aa_haemonc_counts : pd.DataFrame
+        DataFrame with amino acid counts for haemonc cancers
+    truncating_plus_position : pd.DataFrame
+        DataFrame with truncating variants and their positions
+    frameshift_counts_haemonc : pd.DataFrame
+        DataFrame with frameshift counts for haemonc cancers
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with truncating variant counts for haemonc cancers
+    """
+
+    truncating_variants_no_dups = truncating_plus_position.drop_duplicates(
+        subset="grch38_description", keep="first"
+    )[["Hugo_Symbol", "grch38_description", "CDS_position"]]
+
+    merged_frameshift_haemonc_counts = pd.merge(
+        truncating_variants_no_dups,
+        frameshift_counts_haemonc,
+        on=["Hugo_Symbol", "CDS_position"],
+        how="left",
+    ).fillna(0)
+
+    merged_frameshift_ho = pd.merge(
+        merged_aa_haemonc_counts,
+        merged_frameshift_haemonc_counts,
+        on=["Hugo_Symbol", "grch38_description"],
+        how="left",
+    )
+
+    return merged_frameshift_ho
+
+
 def merge_inframe_deletions_with_counts(
     merged_frameshift_counts: pd.DataFrame,
     inframe_deletions_with_positions: pd.DataFrame,
@@ -129,7 +171,52 @@ def merge_inframe_deletions_with_counts(
     return merged
 
 
-def reorder_final_columns(df, patient_total, per_cancer_patient_total):
+def merge_inframe_deletions_haemonc_counts(
+    inframe_deletions: pd.DataFrame,
+    inframe_deletions_count_haemonc_cancers: pd.DataFrame,
+    merged_frameshift_ho: pd.DataFrame,
+):
+    """
+    Merge inframe deletions with their counts for haemonc cancers.
+
+    Parameters
+    ----------
+    inframe_deletions : pd.DataFrame
+        DataFrame with inframe deletions and their positions
+    inframe_deletions_count_haemonc_cancers : pd.DataFrame
+        DataFrame with inframe deletions counts for haemonc cancers
+    merged_frameshift_ho : pd.DataFrame
+        DataFrame with frameshift counts for haemonc cancers
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with inframe deletion counts for haemonc cancers
+    """
+    inframe_deletions_no_dups = inframe_deletions.drop_duplicates(
+        subset="grch38_description", keep="first"
+    )[["Hugo_Symbol", "grch38_description", "del_start", "del_end"]]
+
+    inframe_deletions_haemonc_counts = pd.merge(
+        inframe_deletions_no_dups,
+        inframe_deletions_count_haemonc_cancers,
+        on=["Hugo_Symbol", "del_start", "del_end"],
+        how="left",
+    ).fillna(0)
+
+    all_counts_merged = pd.merge(
+        merged_frameshift_ho,
+        inframe_deletions_haemonc_counts,
+        on=["grch38_description", "Hugo_Symbol"],
+        how="left",
+    )
+
+    return all_counts_merged
+
+
+def reorder_final_columns(
+    df, patient_total, per_cancer_patient_total, haemonc_patient_total=None
+):
     """
     Reorder the final DataFrame columns to match the expected output format.
 
@@ -142,12 +229,21 @@ def reorder_final_columns(df, patient_total, per_cancer_patient_total):
     per_cancer_patient_total : dict
         Dictionary with cancer types as keys and number of unique patients
         as values
-
+    haemonc_patient_total : int, optional
+        Total number of unique patients with haemonc cancers
     Returns
     -------
     pd.DataFrame
         DataFrame with columns reordered to match the expected output format
     """
+    unwanted_prefixes = ["CDS_position", "level", "del_start", "del_end"]
+    df = df[
+        [
+            col
+            for col in df.columns
+            if not any(col.startswith(p) for p in unwanted_prefixes)
+        ]
+    ]
     # Set the total count to be at the beginning of all count columns
     first_cols = [
         "Hugo_Symbol",
@@ -169,6 +265,13 @@ def reorder_final_columns(df, patient_total, per_cancer_patient_total):
         f"SameOrDownstreamTruncatingVariantsPerCDS.Total_Count_N_{patient_total}",
         f"NestedInframeDeletionsPerCDS.Total_Count_N_{patient_total}",
     ]
+    if haemonc_patient_total is not None:
+        count_cols += [
+            f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
+            f"SameAminoAcidChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
+            f"SameOrDownstreamTruncatingVariantsPerCDS.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
+            f"NestedInframeDeletionsPerCDS.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
+        ]
     # Add in cancer type columns in cancer order
     for cancer_type in per_cancer_patient_total.keys():
         count_cols.extend(
@@ -180,25 +283,21 @@ def reorder_final_columns(df, patient_total, per_cancer_patient_total):
             ]
         )
 
+    count_cols = [col for col in count_cols if col in df.columns]
     # Reorder the DataFrame columns
     other_cols = [
         col
         for col in df.columns
-        if (col not in count_cols) and (col not in first_cols)
+        if not (
+            col.startswith("SameNucleotideChange.")
+            or col.startswith("SameAminoAcidChange.")
+            or col.startswith("SameOrDownstreamTruncatingVariantsPerCDS.")
+            or col.startswith("NestedInframeDeletionsPerCDS.")
+        )
+        and (col not in first_cols)
     ]
     final_col_order = first_cols + other_cols + count_cols
-    reordered_df = df[final_col_order]
-
-    reordered_df.drop(
-        columns=[
-            "level_1_x",
-            "level_1_y",
-            "CDS_position",
-            "del_start",
-            "del_end",
-        ],
-        inplace=True,
-    )
+    reordered_df = df[[col for col in final_col_order if col in df.columns]]
 
     reordered_df = reordered_df.sort_values(
         by=["Hugo_Symbol", "grch38_description"]

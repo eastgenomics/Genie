@@ -33,7 +33,9 @@ from utils.counting import (
 from utils.merging import (
     multi_merge,
     merge_truncating_variants_counts,
+    merge_truncating_variant_counts_haemonc,
     merge_inframe_deletions_with_counts,
+    merge_inframe_deletions_haemonc_counts,
     reorder_final_columns,
 )
 
@@ -150,13 +152,13 @@ def main():
     )
 
     amino_acid_change_counts_all_cancer = count_amino_acid_change_all_cancers(
-        df=deduplicated_by_patient,
+        df=genie_data,
         unique_patient_total=patient_total,
     )
 
     amino_acid_change_counts_per_cancer = (
         count_amino_acid_change_per_cancer_type(
-            df=deduplicated_by_patient_and_cancer,
+            df=genie_data,
             unique_patients_per_cancer=per_cancer_patient_total,
         )
     )
@@ -212,7 +214,7 @@ def main():
         )
     )
 
-    merged_inframe_deletion_counts = merge_inframe_deletions_with_counts(
+    all_counts_merged = merge_inframe_deletions_with_counts(
         merged_frameshift_counts=merged_frameshift_counts,
         inframe_deletions_with_positions=inframe_deletions_with_positions,
         inframe_deletions_count_all_cancers=inframe_deletions_count_all_cancers,
@@ -242,9 +244,9 @@ def main():
                 haemonc_patient_total=haemonc_cancer_patient_total,
             )
         )
-        merged_nt_haemonc_counts = pd.merge(
-            merged_inframe_deletion_counts,
-            nucleotide_change_counts_haemonc,
+        merged_nt_haemonc_counts = multi_merge(
+            base_df=all_counts_merged,
+            merge_dfs=[nucleotide_change_counts_haemonc],
             on="grch38_description",
             how="left",
         )
@@ -273,6 +275,12 @@ def main():
             )
         )
 
+        merged_frameshift_ho = merge_truncating_variant_counts_haemonc(
+            merged_aa_haemonc_counts=merged_aa_haemonc_counts,
+            truncating_plus_position=truncating_plus_position,
+            frameshift_counts_haemonc=frameshift_counts_haemonc,
+        )
+
         inframe_deletions_haemonc = get_inframe_deletions(df=haemonc_data)
         inframe_deletions_haemonc_positions = add_deletion_positions(
             inframe_deletions_haemonc
@@ -284,10 +292,17 @@ def main():
             )
         )
 
+        all_counts_merged = merge_inframe_deletions_haemonc_counts(
+            inframe_deletions=inframe_deletions_with_positions,
+            inframe_deletions_count_haemonc_cancers=inframe_deletions_count_haemonc_cancers,
+            merged_frameshift_ho=merged_frameshift_ho,
+        )
+
     final_df = reorder_final_columns(
-        merged_inframe_deletion_counts,
+        all_counts_merged,
         patient_total,
         per_cancer_patient_total,
+        haemonc_cancer_patient_total if args.haemonc_cancer_types else None,
     )
 
     final_df.to_csv(
