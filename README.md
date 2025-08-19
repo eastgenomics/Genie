@@ -27,7 +27,7 @@ Each unique variant in the MAF data are required to be converted to VCF descript
 Example command:
 ```
 python convert_raw_maf_to_vcf.py \
-  --input data_mutations_extended.txt \
+  --input data_mutations_extended_cleaned.txt \
   --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
   --output data_mutations_extended.vcf
 ```
