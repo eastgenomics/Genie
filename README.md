@@ -27,7 +27,7 @@ Each unique variant in the MAF data are required to be converted to VCF descript
 Example command:
 ```
 python convert_raw_maf_to_vcf.py \
-  --input data_mutations_extended.txt \
+  --input data_mutations_extended_cleaned.txt \
   --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
   --output data_mutations_extended.vcf
 ```
@@ -45,7 +45,7 @@ python add_grch38_liftover.py \
 ```
 
 ### Generate count data
-This script generates counts of how many unique patients each variant is present in, with one row per unique variant in the output TSV. The counts types include:
+This script generates counts of how many unique patients each variant is present in for all cancers and per cancer type, with one row per unique variant in the output TSV and each count as a column. The counts types include:
 - The exact nucleotide change (all variants)
 - The same amino acid change (all variants with HGVSp data present)
 - The number of patients with frameshift (truncating) or nonsense variants at that position or downstream in the same gene. This is only present for the following variant types, where `Ter` is present in the HGVSp string:
