@@ -2,21 +2,12 @@
 This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to [UK Somatic Variant Intepretation Guidelines (S-VIG)](https://www.acgs.uk.com/media/12831/svig-uk_guidelines_v10_-_post-acgs_ratification_final_submit01.pdf) and its [supplementary information](https://www.acgs.uk.com/media/12832/svig-uk-supplementary-material-post-acgs-ratification-final.pdf).
 
 
-### Remove unknown genes
-This script removes any rows where the `Hugo_Symbol` is 'Unknown'.
-Example command:
-```
-python remove_unknown_genes.py \
-  --input data_mutations_extended.txt \
-  --output data_mutations_extended_cleaned.txt
-```
-
 ### Merge sample info
 The clinical data (patient IDs, cancer types etc.) must be merged into the MAF data using `Tumor_Sample_Barcode` from the MAF data and `SAMPLE_ID` from the clinical data in order to generate patient counts for each variant later.
 Example command:
 ```
 python merge_sample_info.py \
-  --input_maf data_mutations_extended_cleaned.txt \
+  --input_maf data_mutations_extended.txt \
   --clinical_info data_clinical_sample.txt \
   --output data_mutations_extended_clinical_info.txt
 ```
@@ -27,7 +18,7 @@ Each unique variant in the MAF data are required to be converted to VCF descript
 Example command:
 ```
 python convert_raw_maf_to_vcf.py \
-  --input data_mutations_extended_cleaned.txt \
+  --input data_mutations_extended.txt \
   --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
   --output data_mutations_extended.vcf
 ```

@@ -104,6 +104,7 @@ def merge_inframe_deletions_with_counts(
         how="left",
     )
 
+    print("Dedup")
     # Remove duplicates of the same variant and deletion start and ends
     inframe_with_positions_no_dups = (
         inframe_deletions_with_positions.drop_duplicates(
@@ -111,6 +112,7 @@ def merge_inframe_deletions_with_counts(
         )[["Hugo_Symbol", "grch38_description", "del_start", "del_end"]]
     )
 
+    print("Merging positions and counts")
     # Merge positions and counts
     inframe_deletions_with_counts = pd.merge(
         inframe_with_positions_no_dups,
@@ -119,14 +121,125 @@ def merge_inframe_deletions_with_counts(
         how="left",
     )
 
+    # inframe_deletions_with_counts.set_index(
+    #     ["grch38_description", "Hugo_Symbol"], inplace=True
+    # )
+    # merged_frameshift_counts.set_index(
+    #     ["grch38_description", "Hugo_Symbol"], inplace=True
+    # )
+
+    # merged_frameshift_counts.index.names = [
+    #     "grch38_description",
+    #     "Hugo_Symbol",
+    # ]
+
+    # inframe_deletions_with_counts.index.names = [
+    #     "grch38_description",
+    #     "Hugo_Symbol",
+    # ]
+
+    # print("Final merge")
+    # merged = merged_frameshift_counts.join(
+    #     inframe_deletions_with_counts, how="left"
+    # ).reset_index()
     merged = pd.merge(
         merged_frameshift_counts,
         inframe_deletions_with_counts,
         on=["grch38_description", "Hugo_Symbol"],
         how="left",
     )
+    # merged = pl.from_pandas(merged_frameshift_counts).join(
+    #     pl.from_pandas(inframe_deletions_with_counts),
+    #     on=["grch38_description", "Hugo_Symbol"],
+    #     how="left",
+    # )
 
     return merged
+
+
+def merge_truncating_variant_counts_haemonc(
+    merged_aa_haemonc_counts: pd.DataFrame,
+    truncating_plus_position: pd.DataFrame,
+    frameshift_counts_haemonc: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Merge truncating variants with their counts for haemonc cancers.
+    Parameters
+    ----------
+    merged_aa_haemonc_counts : pd.DataFrame
+        DataFrame with amino acid counts for haemonc cancers
+    truncating_plus_position : pd.DataFrame
+        DataFrame with truncating variants and their positions
+    frameshift_counts_haemonc : pd.DataFrame
+        DataFrame with frameshift counts for haemonc cancers
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with truncating variant counts for haemonc cancers
+    """
+
+    truncating_variants_no_dups = truncating_plus_position.drop_duplicates(
+        subset="grch38_description", keep="first"
+    )[["Hugo_Symbol", "grch38_description", "CDS_position"]]
+
+    merged_frameshift_haemonc_counts = pd.merge(
+        truncating_variants_no_dups,
+        frameshift_counts_haemonc,
+        on=["Hugo_Symbol", "CDS_position"],
+        how="left",
+    ).fillna(0)
+
+    merged_frameshift_ho = pd.merge(
+        merged_aa_haemonc_counts,
+        merged_frameshift_haemonc_counts,
+        on=["Hugo_Symbol", "grch38_description"],
+        how="left",
+    )
+
+    return merged_frameshift_ho
+
+
+def merge_inframe_deletions_haemonc_counts(
+    inframe_deletions: pd.DataFrame,
+    inframe_deletions_count_haemonc_cancers: pd.DataFrame,
+    merged_frameshift_ho: pd.DataFrame,
+):
+    """
+    Merge inframe deletions with their counts for haemonc cancers.
+
+    Parameters
+    ----------
+    inframe_deletions : pd.DataFrame
+        DataFrame with inframe deletions and their positions
+    inframe_deletions_count_haemonc_cancers : pd.DataFrame
+        DataFrame with inframe deletions counts for haemonc cancers
+    merged_frameshift_ho : pd.DataFrame
+        DataFrame with frameshift counts for haemonc cancers
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with inframe deletion counts for haemonc cancers
+    """
+    inframe_deletions_no_dups = inframe_deletions.drop_duplicates(
+        subset="grch38_description", keep="first"
+    )[["Hugo_Symbol", "grch38_description", "del_start", "del_end"]]
+
+    inframe_deletions_haemonc_counts = pd.merge(
+        inframe_deletions_no_dups,
+        inframe_deletions_count_haemonc_cancers,
+        on=["Hugo_Symbol", "del_start", "del_end"],
+        how="left",
+    ).fillna(0)
+
+    all_counts_merged = pd.merge(
+        merged_frameshift_ho,
+        inframe_deletions_haemonc_counts,
+        on=["grch38_description", "Hugo_Symbol"],
+        how="left",
+    )
+
+    return all_counts_merged
 
 
 def reorder_final_columns(
@@ -175,10 +288,10 @@ def reorder_final_columns(
         "Variant_Type",
     ]
     count_cols = [
-        f"SameNucleotideChange.Total_Count_N_{patient_total}",
-        f"SameAminoAcidChange.Total_Count_N_{patient_total}",
-        f"SameOrDownstreamTruncatingVariantsPerCDS.Total_Count_N_{patient_total}",
-        f"NestedInframeDeletionsPerCDS.Total_Count_N_{patient_total}",
+        f"SameNucleotideChange.All_Cancers_Count_N_{patient_total}",
+        f"SameAminoAcidChange.All_Cancers_Count_N_{patient_total}",
+        f"SameOrDownstreamTruncatingVariantsPerCDS.All_Cancers_Count_N_{patient_total}",
+        f"NestedInframeDeletionsPerCDS.All_Cancers_Count_N_{patient_total}",
     ]
     if haemonc_patient_total is not None:
         count_cols += [

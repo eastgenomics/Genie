@@ -117,3 +117,22 @@ def get_inframe_deletions(df: pd.DataFrame) -> pd.DataFrame:
     inframe_deletions = inframe_deletions[inframe_deletions["HGVSc"].notna()]
 
     return inframe_deletions
+
+
+def get_haemonc_cancer_rows(df: pd.DataFrame, haemonc_cancers: list):
+    """
+    Get rows for haemonc cancer types from the DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with columns CANCER_TYPE
+    haemonc_cancers : list
+        List of haemonc cancer types to filter by
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with rows for haemonc cancer types
+    """
+    return df[df["CANCER_TYPE"].isin(haemonc_cancers)].copy()

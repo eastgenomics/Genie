@@ -3,7 +3,7 @@ import re
 
 
 def count_same_nucleotide_change_all_cancers(
-    df: pd.DataFrame, unique_patient_total: int
+    df: pd.DataFrame, unique_patient_total: int, count_type: str
 ) -> pd.DataFrame:
     """
     Count how many patients have the same exact variant across all cancers.
@@ -13,7 +13,9 @@ def count_same_nucleotide_change_all_cancers(
     df : pd.DataFrame
         Input Genie MAF data
     unique_patient_total : int
-        Total number of unique patients in the dataset
+        Total number of unique patients for the count type
+    count_type: str
+        Type of count being performed (e.g. "all_cancers", "per_cancer")
 
     Returns
     -------
@@ -27,7 +29,7 @@ def count_same_nucleotide_change_all_cancers(
         .rename(
             columns={
                 "PATIENT_ID": (
-                    f"SameNucleotideChange.Total_Count_N_{unique_patient_total}"
+                    f"SameNucleotideChange.{count_type}_Count_N_{unique_patient_total}"
                 )
             }
         )
@@ -84,6 +86,53 @@ def count_same_nucleotide_change_per_cancer_type(
     return all_cancer_counts
 
 
+def count_nucleotide_change_haemonc_cancers(
+    haemonc_data, genie_data, haemonc_patient_total
+):
+    """
+    Count how many patients have the exact variant in haemonc cancers.
+
+    Parameters
+    ----------
+    haemonc_data : pd.DataFrame
+        Genie data in haemonc cancer types to calculate counts from
+    genie_data : pd.DataFrame
+        Full Genie data to ensure all variants are present
+    haemonc_patient_total : int
+        Total number of unique patients in haemonc cancer types
+
+    Returns
+    -------
+    pd.DataFrame
+        Count data for each variant in haemonc cancers
+    """
+    # Count unique patients per variant
+    counts = (
+        haemonc_data.groupby("grch38_description")["PATIENT_ID"]
+        .nunique()
+        .rename(
+            f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+        )
+        .reset_index()
+    )
+
+    # Ensure all variants are present, fill missing with zero
+    all_variants = genie_data.drop_duplicates(subset="grch38_description")[
+        "grch38_description"
+    ]
+    result = pd.merge(
+        all_variants, counts, on="grch38_description", how="left"
+    ).fillna(0)
+    result[
+        f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+    ] = result[
+        f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+    ].astype(
+        int
+    )
+    return result
+
+
 def count_amino_acid_change_all_cancers(
     df: pd.DataFrame, unique_patient_total: int
 ) -> pd.DataFrame:
@@ -111,7 +160,7 @@ def count_amino_acid_change_all_cancers(
         .rename(
             columns={
                 "PATIENT_ID": (
-                    f"SameAminoAcidChange.Total_Count_N_{unique_patient_total}"
+                    f"SameAminoAcidChange.All_Cancers_Count_N_{unique_patient_total}"
                 )
             }
         )
@@ -169,6 +218,57 @@ def count_amino_acid_change_per_cancer_type(
     ]
 
     return aa_per_cancer_counts
+
+
+def count_amino_acid_change_haemonc_cancers(
+    haemonc_data: pd.DataFrame,
+    genie_data: pd.DataFrame,
+    haemonc_patient_total: int,
+):
+    """
+    Count how many patients have the same amino acid change in that gene
+    in haemonc cancers.
+
+    Parameters
+    ----------
+    haemonc_data : pd.DataFrame
+        Genie data in haemonc cancer types to calculate counts from
+    genie_data : pd.DataFrame
+        Full Genie data to ensure all variants are present
+    haemonc_patient_total : int
+        Total number of unique patients in haemonc cancer types
+
+    Returns
+    -------
+    pd.DataFrame
+        Count data for each variant in haemonc cancers
+    """
+    # Count unique patients per variant
+    counts = (
+        haemonc_data.groupby(["Hugo_Symbol", "HGVSp"])["PATIENT_ID"]
+        .nunique()
+        .rename(
+            f"SameAminoAcidChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+        )
+        .reset_index()
+    )
+    # Ensure all gene and HGVSp combinations are present, fill missing with zero
+    all_aa_variants = genie_data.drop_duplicates(
+        subset=["Hugo_Symbol", "HGVSp"]
+    )[["Hugo_Symbol", "HGVSp"]]
+
+    result = pd.merge(
+        all_aa_variants, counts, on=["Hugo_Symbol", "HGVSp"], how="left"
+    ).fillna(0)
+    result[
+        f"SameAminoAcidChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+    ] = result[
+        f"SameAminoAcidChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+    ].astype(
+        int
+    )
+
+    return result
 
 
 def extract_position_from_cds(hgvsc_value: str) -> int | None:
@@ -287,7 +387,7 @@ def count_frameshift_truncating_and_nonsense_all_cancers(
     result = result.rename(
         columns={
             "downstream_patient_count": (
-                f"SameOrDownstreamTruncatingVariantsPerCDS.Total_Count_N_{patient_total}"
+                f"SameOrDownstreamTruncatingVariantsPerCDS.All_Cancers_Count_N_{patient_total}"
             )
         }
     )
@@ -371,36 +471,55 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
     return per_cancer_pivot
 
 
-def parse_deletion_positions(pos_str):
+def count_frameshift_truncating_and_nonsense_haemonc_cancers(
+    df: pd.DataFrame,
+    patient_total: int,
+) -> pd.DataFrame:
     """
-    Extract the positions affected for an inframe deletion from parts of a
-    HGVSc string, taking into account intronic offsets.
+    Count how many patients have a frameshift (truncating) or nonsense variant
+    at the same position or downstream in the same gene in haemonc cancers.
 
     Parameters
     ----------
-    pos_str : str
-        Position string from HGVSc, e.g. 1744' or '1745+1'
+    df : pd.DataFrame
+        DataFrame containing truncating variants with position
+    patient_total : int
+        Total number of unique patients in haemonc cancers.
 
     Returns
     -------
-    int
-        The position affected, adjusted for any intronic offsets
+    pd.DataFrame
+        DataFrame with frameshift (truncating) and nonsense counts
     """
-    if "+" in pos_str:
-        base, offset = pos_str.split("+")
-        return int(base) + int(offset)
-    elif "-" in pos_str:
-        base, offset = pos_str.split("-")
-        return int(base) - int(offset)
-    else:
-        return int(pos_str)
+    # For each gene, add counts at each position or downstream
+    result = (
+        df.groupby("Hugo_Symbol")
+        .apply(count_patients_with_variant_at_same_position_or_downstream)
+        .reset_index()
+    )
+
+    # Rename column to add patient N
+    result = result.rename(
+        columns={
+            "downstream_patient_count": (
+                f"SameOrDownstreamTruncatingVariantsPerCDS.Haemonc_Cancers_Count_N_{patient_total}"
+            )
+        }
+    )
+
+    return result
 
 
 def extract_hgvsc_deletion_positions(hgvsc):
     """
-    Extract deletion start and end from an HGVSc string, e.g.:
-    'ENST00000269305.4:c.480_485del' -> (480, 485) or
-    'ENST00000296930.5:c.511_524+1del' -> (511, 525).
+    Extract deletion coding start and end from an HGVSc string, ignoring
+    intronic offsets.
+
+    Examples
+    --------
+    'ENST00000269305.4:c.480_485del'    -> (480, 485)
+    'ENST00000296930.5:c.511_524+1del'  -> (511, 524)
+    'ENST00000269305.4:c.480del'        -> (480, 480)
 
     Parameters
     ----------
@@ -416,13 +535,11 @@ def extract_hgvsc_deletion_positions(hgvsc):
     if not isinstance(hgvsc, str):
         return None, None
 
-    # Match deletion pattern
-    match = re.search(r"c\.([0-9+\-]+)_([0-9+\-]+)del", hgvsc)
-
+    # Match deletion with range, capturing only base numbers (ignore intronic offsets)
+    match = re.search(r"c\.(\d+)[+-]?\d*_?(\d+)?[+-]?\d*del", hgvsc)
     if match:
-        start_str, end_str = match.groups()
-        start = parse_deletion_positions(start_str)
-        end = parse_deletion_positions(end_str)
+        start = int(match.group(1))
+        end = int(match.group(2)) if match.group(2) else start
         return start, end
 
     return None, None
@@ -524,7 +641,7 @@ def count_nested_inframe_deletions_all_cancers(
     ).rename(
         columns={
             "nested_patient_count": (
-                f"NestedInframeDeletionsPerCDS.Total_Count_N_{patient_total}"
+                f"NestedInframeDeletionsPerCDS.All_Cancers_Count_N_{patient_total}"
             )
         }
     )
@@ -605,3 +722,37 @@ def count_nested_inframe_deletions_per_cancer_type(
     per_cancer_pivot.columns = new_columns
 
     return per_cancer_pivot
+
+
+def count_nested_inframe_deletions_haemonc_cancers(
+    inframe_deletions_df: pd.DataFrame, patient_total: int
+) -> pd.DataFrame:
+    """
+    Count the number of unique patients with inframe deletions that are either
+    the same as or nested within the current deletion for all cancers.
+
+    Parameters
+    ----------
+    inframe_deletions_df : pd.DataFrame
+        DataFrame containing inframe deletions with patient information.
+    patient_total : int
+        Total number of unique patients in the dataset.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with counts of matching or nested inframe deletions.
+    """
+    inframe_counts = (
+        inframe_deletions_df.groupby("Hugo_Symbol")
+        .apply(count_patients_with_nested_deletions)
+        .reset_index()
+    ).rename(
+        columns={
+            "nested_patient_count": (
+                f"NestedInframeDeletionsPerCDS.Haemonc_Cancers_Count_N_{patient_total}"
+            )
+        }
+    )
+
+    return inframe_counts
