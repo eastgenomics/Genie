@@ -121,38 +121,12 @@ def merge_inframe_deletions_with_counts(
         how="left",
     )
 
-    # inframe_deletions_with_counts.set_index(
-    #     ["grch38_description", "Hugo_Symbol"], inplace=True
-    # )
-    # merged_frameshift_counts.set_index(
-    #     ["grch38_description", "Hugo_Symbol"], inplace=True
-    # )
-
-    # merged_frameshift_counts.index.names = [
-    #     "grch38_description",
-    #     "Hugo_Symbol",
-    # ]
-
-    # inframe_deletions_with_counts.index.names = [
-    #     "grch38_description",
-    #     "Hugo_Symbol",
-    # ]
-
-    # print("Final merge")
-    # merged = merged_frameshift_counts.join(
-    #     inframe_deletions_with_counts, how="left"
-    # ).reset_index()
     merged = pd.merge(
         merged_frameshift_counts,
         inframe_deletions_with_counts,
         on=["grch38_description", "Hugo_Symbol"],
         how="left",
     )
-    # merged = pl.from_pandas(merged_frameshift_counts).join(
-    #     pl.from_pandas(inframe_deletions_with_counts),
-    #     on=["grch38_description", "Hugo_Symbol"],
-    #     how="left",
-    # )
 
     return merged
 
@@ -177,7 +151,6 @@ def merge_truncating_variant_counts_haemonc(
     pd.DataFrame
         Merged DataFrame with truncating variant counts for haemonc cancers
     """
-
     truncating_variants_no_dups = truncating_plus_position.drop_duplicates(
         subset="grch38_description", keep="first"
     )[["Hugo_Symbol", "grch38_description", "CDS_position"]]

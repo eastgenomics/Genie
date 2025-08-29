@@ -3,8 +3,9 @@ import numpy as np
 import pandas as pd
 import pysam
 
-from utils.file_io import read_in_to_df
 from utils.consequence_priorities import effect_priority, effect_map
+from utils.dtypes import column_dtypes
+from utils.file_io import read_in_to_df
 
 
 def parse_args() -> argparse.Namespace:
@@ -17,7 +18,10 @@ def parse_args() -> argparse.Namespace:
         Namespace of passed command line argument inputs
     """
     parser = argparse.ArgumentParser(
-        description="Information required to generate counts from MAF file"
+        description=(
+            "Information required to fix annotations for duplicates in Genie"
+            " data"
+        )
     )
 
     parser.add_argument(
@@ -34,7 +38,10 @@ def parse_args() -> argparse.Namespace:
         "--vep_vcf",
         required=True,
         type=str,
-        help="Path to VCF of duplicates which have been annotated with VEP",
+        help=(
+            "Path to VCF of unique duplicates which have been annotated"
+            " with VEP"
+        ),
     )
 
     parser.add_argument(
@@ -49,8 +56,7 @@ def parse_args() -> argparse.Namespace:
 
 def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
     """
-    Read in the VCF of the normalisation duplicates annotated by VEP to
-    a dataframe.
+    Read in VCF of normalisation duplicates annotated by VEP to a dataframe.
 
     Parameters
     ----------
@@ -65,8 +71,7 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
     """
     vcf_in = pysam.VariantFile(vcf_file, "r")
 
-    # Store required data from GRCh38 VCF in a list of dictionaries then
-    # convert to a DataFrame
+    # Parse VCF records and generate a dataframe
     records = []
     for record in vcf_in:
         row = {
@@ -76,7 +81,6 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
             "ALT": ",".join(str(a) for a in record.alts),
             "Genie_description": record.info.get("Genie_description", None),
             "Transcript_ID": record.info.get("Transcript_ID", None),
-            "VEP_VARIANT_CLASS": record.info.get("CSQ_VARIANT_CLASS", None),
             "VEP_Consequence": record.info.get("CSQ_Consequence", None),
             "VEP_Feature": record.info.get("CSQ_Feature", None),
             "VEP_HGVSc": record.info.get("CSQ_HGVSc", None),
@@ -107,8 +111,9 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
         + vcf_df["alt_grch37"].astype(str)
     )
 
+    # Pysam gives tuples for the VEP annotations for some reason so just
+    # get the value
     for col in [
-        "VEP_VARIANT_CLASS",
         "VEP_Consequence",
         "VEP_Feature",
         "VEP_HGVSc",
@@ -118,14 +123,13 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
             lambda x: x[0] if isinstance(x, tuple) and len(x) == 1 else x
         )
 
-    # Extract the version of the Ensembl transcript
+    # Extract the version of the Ensembl transcript from the HGVSc
     vcf_df["VEP_Feature_Version"] = (
         vcf_df["VEP_HGVSc"].astype(str).str.split(":").str[0]
     )
 
     # Replace '.' with NaNs to match the rest of the variants
     cols = [
-        "VEP_VARIANT_CLASS",
         "VEP_Consequence",
         "VEP_Feature",
         "VEP_Feature_Version",
@@ -134,18 +138,25 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
     ]
     vcf_df[cols] = vcf_df[cols].replace(".", np.nan)
 
-    # Split out just the p. from the HGVSp
-    vcf_df["VEP_p"] = vcf_df["VEP_HGVSp"].astype(str).str.split(":").str[1]
-    # Replace URL encoding to equals sign
-    vcf_df["VEP_p"] = vcf_df["VEP_p"].str.replace("%3D", "=", regex=False)
+    # Split out just the p. from the HGVSp and replace URL encoding for '='
+    vcf_df["VEP_p"] = (
+        vcf_df["VEP_HGVSp"]
+        .astype(str)
+        .str.split(":", n=1)
+        .str[1]
+        .str.replace("%3D", "=", regex=False)
+    )
 
     # Reorder columns
     vcf_df = vcf_df[
         [
             "grch37_norm",
+            "chrom_grch37",
+            "pos_grch37",
+            "ref_grch37",
+            "alt_grch37",
             "Genie_description",
             "Transcript_ID",
-            "VEP_VARIANT_CLASS",
             "VEP_Consequence",
             "VEP_Feature",
             "VEP_Feature_Version",
@@ -158,7 +169,9 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
     return vcf_df
 
 
-def get_normalisation_duplicates(genie_data: pd.DataFrame) -> pd.DataFrame:
+def get_normalisation_duplicates(
+    genie_data: pd.DataFrame, variant_key: str
+) -> pd.DataFrame:
     """
     Find any rows where they have the same grch38_description but
     the original Genie_description values were different.
@@ -167,6 +180,8 @@ def get_normalisation_duplicates(genie_data: pd.DataFrame) -> pd.DataFrame:
     ----------
     genie_data : pd.DataFrame
         DataFrame containing Genie variant data and liftover
+    variant_key : str
+        The name of the column to use as the variant key
 
     Returns
     -------
@@ -174,16 +189,16 @@ def get_normalisation_duplicates(genie_data: pd.DataFrame) -> pd.DataFrame:
         DataFrame containing rows with conflicting normalisation
     """
     conflicting_norms = (
-        genie_data.groupby("grch38_description")["Genie_description"]
+        genie_data.groupby(variant_key)["Genie_description"]
         .nunique()
         .reset_index()
-        .query("Genie_description > 1")["grch38_description"]
+        .query("Genie_description > 1")[variant_key]
     )
 
     conflicting_rows = (
-        genie_data[genie_data["grch38_description"].isin(conflicting_norms)]
+        genie_data[genie_data[variant_key].isin(conflicting_norms)]
         .drop_duplicates()
-        .sort_values(by=["grch38_description", "Genie_description"])
+        .sort_values(by=[variant_key, "Genie_description"])
     )
 
     return conflicting_rows
@@ -203,20 +218,18 @@ def unique_with_nan(list_of_values: list) -> list:
     list
         List of unique values, with NaN included if present.
     """
-    seen = []
-    for val in list_of_values:
-        if pd.isna(val):
-            continue
-        if val not in seen:
-            seen.append(val)
-    if any(pd.isna(val) for val in list_of_values):
-        seen.append(np.nan)
+    uniques = pd.unique([v for v in list_of_values if not pd.isna(v)]).tolist()
+    if pd.Series(list_of_values).isna().any():
+        uniques.append(np.nan)
 
-    return seen
+    return uniques
 
 
-def convert_duplicates_to_one_row_per_grch38(
-    duplicates: pd.DataFrame, annotations_list: list
+def convert_duplicates_to_one_variant_per_row(
+    duplicates: pd.DataFrame,
+    annotations_list: list,
+    variant_key_for_grouping: str,
+    variant_key_to_take_first: str,
 ) -> pd.DataFrame:
     """
     Convert the duplicates DataFrame to one row per grch38_description
@@ -225,6 +238,12 @@ def convert_duplicates_to_one_row_per_grch38(
     ----------
     duplicates : pd.DataFrame
         DataFrame containing duplicate rows
+    annotations_list : list
+        list of annotations to aggregate
+    variant_key_for_grouping: str
+        the column name to use as the unique variant descriptor
+    variant_key_to_take_first : str
+        The variant column name to take the first value from
 
     Returns
     -------
@@ -232,95 +251,81 @@ def convert_duplicates_to_one_row_per_grch38(
         DataFrame with one row per grch38_description
     """
     agg_dict = {
-        "grch37_norm": "first",
-        "Genie_description": lambda x: pd.unique(
-            x.dropna().tolist() + ([np.nan] if x.isna().any() else [])
-        ),
+        variant_key_to_take_first: "first",
+        "Genie_description": lambda x: unique_with_nan(x),
     }
     for col in annotations_list:
         agg_dict[col] = lambda x: unique_with_nan(x)
 
     aggregated_df = (
-        duplicates.groupby("grch38_description").agg(agg_dict).reset_index()
+        duplicates.groupby(variant_key_for_grouping)
+        .agg(agg_dict)
+        .reset_index()
     )
 
     return aggregated_df
 
 
-def add_columns_for_whether_annotations_same(
-    aggregated_dups: pd.DataFrame, annotations_to_check: list
-) -> pd.DataFrame:
+def check_annotations_for_variants(
+    df: pd.DataFrame, annotations_to_check: list
+):
     """
-    Check if the annotations for the normalisation duplicates DataFrame
-    are the same across all Genie descriptions
+    Check if specified annotations are consistent for duplicates and return rows with differences.
 
     Parameters
     ----------
-    aggregated_dups : pd.DataFrame
-        DataFrame with one row per grch38_description
+    df : pd.DataFrame
+        DataFrame with one row per grch38_description.
     annotations_to_check : list
-        List of annotations to check for consistency
+        List of annotations to check for consistency.
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame with additional columns indicating if annotations are the same
+    dict
+        Dictionary where keys are annotation names and values are DataFrames
+        containing rows with differing annotations.
     """
-    # Check whether there are more than 1 value in the annotation column
-    # - if there is, then all rows don't have the same annotation and
-    # is set to False
+    differing_rows = {}
+
     for annotation in annotations_to_check:
-        aggregated_dups[f"same_{annotation}"] = aggregated_dups[
-            annotation
-        ].apply(lambda x: len(set(x)) == 1 if isinstance(x, list) else False)
+        df_temp = df.copy()
+        # Create a boolean column indicating whether all values are the same
+        same_col = f"same_{annotation}"
+        df_temp[same_col] = df_temp[annotation].apply(
+            lambda x: len(set(x)) == 1 if isinstance(x, list) else False
+        )
 
-    return aggregated_dups
+        # Filter rows where annotation is not consistent
+        diff_rows = df_temp.loc[~df_temp[same_col]]
+        differing_rows[annotation] = diff_rows
+
+        # Print summary
+        if diff_rows.empty:
+            print(f"No rows with different {annotation} found.")
+        else:
+            print(
+                f"Found {len(diff_rows)} rows with different {annotation} for"
+                " the same Genie variant."
+            )
+
+    return differing_rows
 
 
-def check_whether_transcripts_and_gene_for_dups_are_same(
-    aggregated_dups_check: pd.DataFrame,
-) -> pd.DataFrame:
+def first_or_nan(x):
     """
-    Find any annotations in the Genie data for the same variant that have a
-    different Ensembl transcript or different Hugo_Symbol (this would be bad).
+    Return the first element of a list or NaN.
 
     Parameters
     ----------
-    aggregated_dups_check : pd.DataFrame
-        DataFrame with one row per grch38_description
+    x : list
+        Input list to extract the first element from.
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame containing rows where annotations are against different transcripts
+    str or int
+        The first element of the list or NaN.
     """
-    rows_with_different_tx = aggregated_dups_check[
-        ~aggregated_dups_check["same_Transcript_ID"]
-    ]
-
-    rows_with_different_symbol = aggregated_dups_check[
-        ~aggregated_dups_check["same_Hugo_Symbol"]
-    ]
-
-    if (len(rows_with_different_tx) == 0) and (
-        len(rows_with_different_symbol) == 0
-    ):
-        print(
-            "No rows with different Transcript_ID or Hugo_Symbol found for the"
-            " same normalised variant"
-        )
-        return True, True
-    else:
-        print(
-            f"Found {len(rows_with_different_tx)} rows with different"
-            " RefSeq annotations."
-        )
-        print(
-            f"Found {len(rows_with_different_symbol)} rows found with"
-            " different Hugo_Symbol"
-        )
-
-        return rows_with_different_tx, rows_with_different_symbol
+    return x[0] if isinstance(x, list) and x else np.nan
 
 
 def merge_vep_annotations_with_duplicates(
@@ -341,34 +346,36 @@ def merge_vep_annotations_with_duplicates(
     pd.DataFrame
         Merged DataFrame containing duplicates with their VEP annotations
     """
-    norm_dups_merged_with_vep = pd.merge(
+    merged = pd.merge(
         duplicates_one_row_per_variant,
         vep_annotations,
         on="grch37_norm",
         how="left",
     )
 
-    # For variant(s) not annotated at all by VEP, take the
+    # For any variant(s) not annotated at all by VEP, take the
     # annotations from the first instance of the variant
-    mask = norm_dups_merged_with_vep["VEP_Feature"].isna()
-    # Fill the values using the first element of the lists
-    norm_dups_merged_with_vep.loc[mask, "VEP_Consequence"] = (
-        norm_dups_merged_with_vep.loc[mask, "Consequence"].apply(
-            lambda x: x[0] if isinstance(x, list) and len(x) > 0 else np.nan
+    mask = merged["VEP_Feature"].isna()
+    if mask.any():
+        print(
+            "The following variant(s) were not annotated by VEP; the"
+            " annotations for the first instance of the variant in the Genie"
+            " data will be used:"
         )
-    )
-    norm_dups_merged_with_vep.loc[mask, "VEP_HGVSc"] = (
-        norm_dups_merged_with_vep.loc[mask, "HGVSc"].apply(
-            lambda x: x[0] if isinstance(x, list) and len(x) > 0 else np.nan
-        )
-    )
-    norm_dups_merged_with_vep.loc[mask, "VEP_p"] = (
-        norm_dups_merged_with_vep.loc[mask, "HGVSp"].apply(
-            lambda x: x[0] if isinstance(x, list) and len(x) > 0 else np.nan
-        )
-    )
+        print(merged.loc[mask].columns)
 
-    return norm_dups_merged_with_vep
+    fallback_map = {
+        "Consequence": "VEP_Consequence",
+        "HGVSc": "VEP_HGVSc",
+        "HGVSp": "VEP_p",
+    }
+
+    for source_column, destination_column in fallback_map.items():
+        merged.loc[mask, destination_column] = merged.loc[
+            mask, source_column
+        ].apply(first_or_nan)
+
+    return merged
 
 
 def get_most_severe_consequence(
@@ -399,13 +406,13 @@ def get_most_severe_consequence(
 
 def split_out_grch37_chrom_pos_ref_alt(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Split the 'grch37_norm' column into separate columns for chromosome, position, reference, and alternate alleles.
+    Split the 'grch37_norm' column into separate columns for CHROM,
+    POS, REF, and ALT.
 
     Parameters
     ----------
     df : pd.DataFrame
         DataFrame containing the 'grch37_norm' column.
-
     Returns
     -------
     pd.DataFrame
@@ -437,25 +444,25 @@ def classify_variant_type(ref: str, alt: str) -> str:
     tuple
         (variant_type, inframe)
         variant_type: str
-        inframe: bool or None
+        inframe: bool
     """
     ref_len = len(ref)
     alt_len = len(alt)
 
     if ref_len == 1 and alt_len == 1:
-        return "SNP", None
+        return "SNP", False
     elif ref_len > alt_len:
         return "DEL", (abs(ref_len - alt_len) % 3 == 0)
     elif ref_len < alt_len:
         return "INS", (abs(ref_len - alt_len) % 3 == 0)
     elif ref_len == alt_len == 2:
-        return "DNP", None
+        return "DNP", False
     elif ref_len == alt_len == 3:
-        return "TNP", None
+        return "TNP", False
     elif ref_len == alt_len and ref_len > 3:
-        return "ONP", None
+        return "ONP", False
     else:
-        return "UNKNOWN", None
+        return "UNKNOWN", False
 
 
 def get_variant_classification(
@@ -547,6 +554,8 @@ def merge_fixed_duplicates(
         indicator=True,
     )
 
+    # Only overwrite the values for rows when merge created the NaN (row is
+    # "left_only") and not where VEP annotated it as NaN
     for col_vep, col_orig in [
         ("VEP_Consequence", "Consequence"),
         ("VEP_HGVSc", "HGVSc"),
@@ -554,7 +563,6 @@ def merge_fixed_duplicates(
         ("Fixed_Variant_Type", "Variant_Type"),
         ("Fixed_Variant_Classification", "Variant_Classification"),
     ]:
-        # Only overwrite when merge created the NaN (row is "left_only")
         mask = (
             fixed_final["_merge"].eq("left_only") & fixed_final[col_vep].isna()
         )
@@ -596,74 +604,14 @@ def main():
     genie_data_plus_liftover = read_in_to_df(
         args.input,
         header=0,
-        usecols=[
-            "Hugo_Symbol",
-            "Strand",
-            "Consequence",
-            "Variant_Classification",
-            "Variant_Type",
-            "Chromosome",
-            "Start_Position",
-            "End_Position",
-            "Reference_Allele",
-            "Tumor_Seq_Allele2",
-            "Tumor_Sample_Barcode",
-            "HGVSc",
-            "HGVSp",
-            "Transcript_ID",
-            "RefSeq",
-            "Protein_position",
-            "Codons",
-            "Exon_Number",
-            "PATIENT_ID",
-            "SAMPLE_ID",
-            "AGE_AT_SEQ_REPORT",
-            "ONCOTREE_CODE",
-            "SAMPLE_TYPE",
-            "SEQ_ASSAY_ID",
-            "CANCER_TYPE",
-            "CANCER_TYPE_DETAILED",
-            "SAMPLE_TYPE_DETAILED",
-            "SAMPLE_CLASS",
-            "variant_description",
-            "chrom_grch38",
-            "pos_grch38",
-            "ref_grch38",
-            "alt_grch38",
-            "Genie_description",
-            "grch37_norm",
-            "grch38_description",
-        ],
-        dtype={
-            "Hugo_Symbol": "str",
-            "Strand": "str",
-            "Chromosome": "str",
-            "Start_Position": "Int64",
-            "Entrez_Gene_Id": "Int64",
-            "Reference_Allele": "str",
-            "Tumor_Seq_Allele2": "str",
-            "Consequence": "str",
-            "Variant_Classification": "str",
-            "Variant_Type": "str",
-            "Transcript_ID": "str",
-            "RefSeq": "str",
-            "HGVSc": "str",
-            "HGVSp": "str",
-            "Protein_position": "str",
-            "Exon_Number": "str",
-            "chrom_grch38": "str",
-            "pos_grch38": "Int64",
-            "ref_grch38": "str",
-            "alt_grch38": "str",
-            "AGE_AT_SEQ_REPORT": "str",
-        },
+        usecols=list(column_dtypes.keys()),
+        dtype=column_dtypes,
     )
 
-    # Find duplicates where the grch38 values correspond to multiple
-    # grch37 norm values
     norm_duplicate_rows = get_normalisation_duplicates(
-        genie_data_plus_liftover
+        genie_data_plus_liftover, "grch37_norm"
     )
+
     annotations_to_check = [
         "Hugo_Symbol",
         "Consequence",
@@ -674,21 +622,15 @@ def main():
         "HGVSc",
         "HGVSp",
     ]
-    agg_duplicates = convert_duplicates_to_one_row_per_grch38(
+    agg_duplicates = convert_duplicates_to_one_variant_per_row(
         norm_duplicate_rows,
         annotations_to_check,
+        "grch37_norm",
+        "grch38_description",
     )
 
-    agg_duplicates_plus_whether_same = (
-        add_columns_for_whether_annotations_same(
-            agg_duplicates, annotations_to_check
-        )
-    )
-
-    rows_with_different_tx, rows_with_different_symbol = (
-        check_whether_transcripts_and_gene_for_dups_are_same(
-            agg_duplicates_plus_whether_same
-        )
+    check_annotations_for_variants(
+        agg_duplicates, ["Hugo_Symbol", "Transcript_ID"]
     )
 
     norm_dups_merged_with_vep = merge_vep_annotations_with_duplicates(
