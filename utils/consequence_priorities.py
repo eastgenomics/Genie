@@ -85,40 +85,32 @@ effect_priority = {
 }
 
 effect_map = {
-    # Splice
     "splice_acceptor_variant": "Splice_Site",
     "splice_donor_variant": "Splice_Site",
     "transcript_ablation": "Splice_Site",
     "exon_loss_variant": "Splice_Site",
     "splice_region_variant": "Splice_Region",
-    # Stop
     "stop_gained": "Nonsense_Mutation",
     "stop_lost": "Nonstop_Mutation",
     "incomplete_terminal_codon_variant": "Silent",
     "stop_retained_variant": "Silent",
-    # Start/initiation
     "initiator_codon_variant": "Translation_Start_Site",
     "start_lost": "Translation_Start_Site",
-    # Missense
     "missense_variant": "Missense_Mutation",
     "coding_sequence_variant": "Missense_Mutation",
     "conservative_missense_variant": "Missense_Mutation",
     "rare_amino_acid_variant": "Missense_Mutation",
-    # Silent
     "synonymous_variant": "Silent",
     "NMD_transcript_variant": "Silent",
-    # RNA-related
     "mature_miRNA_variant": "RNA",
     "exon_variant": "RNA",
     "non_coding_exon_variant": "RNA",
     "non_coding_transcript_exon_variant": "RNA",
     "non_coding_transcript_variant": "RNA",
     "nc_transcript_variant": "RNA",
-    # UTR
     "5_prime_UTR_variant": "5'UTR",
     "5_prime_UTR_premature_start_codon_gain_variant": "5'UTR",
     "3_prime_UTR_variant": "3'UTR",
-    # Intron / intergenic
     "transcript_amplification": "Intron",
     "intron_variant": "Intron",
     "INTRAGENIC": "Intron",

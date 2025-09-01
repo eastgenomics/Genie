@@ -11,21 +11,18 @@ from utils.aggregation import (
     get_inframe_deletions,
     get_haemonc_cancer_rows,
 )
+from utils.dtypes import column_dtypes
 from utils.counting import (
-    count_same_nucleotide_change_all_cancers,
+    count_same_nucleotide_change,
     count_same_nucleotide_change_per_cancer_type,
-    count_nucleotide_change_haemonc_cancers,
-    count_amino_acid_change_all_cancers,
+    count_amino_acid_change,
     count_amino_acid_change_per_cancer_type,
-    count_amino_acid_change_haemonc_cancers,
-    count_frameshift_truncating_and_nonsense_all_cancers,
+    count_frameshift_truncating_and_nonsense,
     count_frameshift_truncating_and_nonsense_per_cancer_type,
-    count_frameshift_truncating_and_nonsense_haemonc_cancers,
     add_deletion_positions,
     extract_position_affected,
-    count_nested_inframe_deletions_all_cancers,
+    count_nested_inframe_deletions,
     count_nested_inframe_deletions_per_cancer_type,
-    count_nested_inframe_deletions_haemonc_cancers,
 )
 from utils.merging import (
     multi_merge,
@@ -85,27 +82,11 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-    genie_data = read_in_to_df(
-        args.input,
-        header=0,
-        dtype={
-            "Hugo_Symbol": "str",
-            "Start_Position": "Int64",
-            "Entrez_Gene_Id": "Int64",
-        },
-        converters={
-            col: lambda x: str(x).strip() if pd.notnull(x) else x
-            for col in [
-                "Chromosome",
-                "Reference_Allele",
-                "Tumor_Seq_Allele2",
-                "chrom_grch38",
-                "pos_grch38",
-                "ref_grch38",
-                "alt_grch38",
-            ]
-        },
-    )
+    genie_data = read_in_to_df(args.input, header=0, dtype=column_dtypes)
+
+    for col in ["Hugo_Symbol", "HGVSp"]:
+        if genie_data[col].dtype == "object":
+            genie_data[col] = genie_data[col].astype("category")
 
     columns_to_aggregate = read_txt_file_to_list(args.columns_to_aggregate)
     if args.haemonc_cancer_types:
@@ -123,17 +104,15 @@ def main():
     )
 
     print(f"{datetime.now()}, Generating nucleotide counts")
-    nucleotide_change_counts_all_cancer = (
-        count_same_nucleotide_change_all_cancers(
-            df=genie_data,
-            unique_patient_total=patient_total,
-            count_type="All_Cancers",
-        )
+    nucleotide_change_counts_all_cancer = count_same_nucleotide_change(
+        df=genie_data[["grch38_description", "PATIENT_ID"]],
+        unique_patient_total=patient_total,
+        count_type="All_Cancers",
     )
 
     nucleotide_change_counts_per_cancer = (
         count_same_nucleotide_change_per_cancer_type(
-            df=genie_data,
+            df=genie_data[["grch38_description", "PATIENT_ID", "CANCER_TYPE"]],
             unique_patients_per_cancer=per_cancer_patient_total,
         )
     )
@@ -148,14 +127,17 @@ def main():
     )
 
     print(f"{datetime.now()}, Generating amino acid counts")
-    amino_acid_change_counts_all_cancer = count_amino_acid_change_all_cancers(
-        df=genie_data,
+    amino_acid_change_counts_all_cancer = count_amino_acid_change(
+        df=genie_data[["Hugo_Symbol", "HGVSp", "PATIENT_ID"]],
         unique_patient_total=patient_total,
+        count_type="All_Cancers",
     )
 
     amino_acid_change_counts_per_cancer = (
         count_amino_acid_change_per_cancer_type(
-            df=genie_data,
+            df=genie_data[
+                ["Hugo_Symbol", "HGVSp", "PATIENT_ID", "CANCER_TYPE"]
+            ],
             unique_patients_per_cancer=per_cancer_patient_total,
         )
     )
@@ -170,14 +152,21 @@ def main():
     )
 
     print(f"{datetime.now()}, Generating truncating variant counts")
-    truncating_variants = get_truncating_variants(genie_data)
+    truncating_variants = get_truncating_variants(genie_data)[
+        [
+            "Hugo_Symbol",
+            "grch38_description",
+            "HGVSc",
+            "PATIENT_ID",
+            "CANCER_TYPE",
+        ]
+    ]
     truncating_plus_position = extract_position_affected(truncating_variants)
 
-    frameshift_counts_all_cancers = (
-        count_frameshift_truncating_and_nonsense_all_cancers(
-            df=truncating_plus_position,
-            patient_total=patient_total,
-        )
+    frameshift_counts_all_cancers = count_frameshift_truncating_and_nonsense(
+        df=truncating_plus_position,
+        patient_total=patient_total,
+        cancer_count_type="All_Cancers",
     )
 
     frameshift_counts_per_cancer = (
@@ -187,6 +176,7 @@ def main():
         )
     )
 
+    print(f"{datetime.now()}, Merging truncating variants with counts")
     merged_frameshift_counts = merge_truncating_variants_counts(
         merged_amino_acid_counts=merged_amino_acid_counts,
         truncating_variants=truncating_plus_position,
@@ -195,15 +185,22 @@ def main():
     )
 
     print(datetime.now(), "Generating inframe deletion counts")
-    inframe_deletions = get_inframe_deletions(genie_data)
+    inframe_deletions = get_inframe_deletions(genie_data)[
+        [
+            "grch38_description",
+            "Hugo_Symbol",
+            "HGVSc",
+            "PATIENT_ID",
+            "CANCER_TYPE",
+        ]
+    ]
     inframe_deletions_with_positions = add_deletion_positions(
         inframe_deletions
     )
-    inframe_deletions_count_all_cancers = (
-        count_nested_inframe_deletions_all_cancers(
-            inframe_deletions_df=inframe_deletions_with_positions,
-            patient_total=patient_total,
-        )
+    inframe_deletions_count_all_cancers = count_nested_inframe_deletions(
+        inframe_deletions_df=inframe_deletions_with_positions,
+        cancer_count_type="All_Cancers",
+        patient_total=patient_total,
     )
 
     inframe_deletions_count_per_cancer = (
@@ -228,12 +225,11 @@ def main():
             haemonc_cancers=haemonc_cancers,
         )
 
-        nucleotide_counts_haemonc_cancers = (
-            count_nucleotide_change_haemonc_cancers(
-                haemonc_data=haemonc_rows,
-                genie_data=genie_data,
-                haemonc_patient_total=haemonc_cancer_patient_total,
-            )
+        nucleotide_counts_haemonc_cancers = count_same_nucleotide_change(
+            df=haemonc_rows,
+            unique_patient_total=haemonc_cancer_patient_total,
+            count_type="Haemonc_Cancers",
+            all_variants_df=genie_data,
         )
 
         merged_nt_haemonc_counts = multi_merge(
@@ -243,12 +239,12 @@ def main():
             how="left",
         )
 
-        amino_acid_counts_haemonc_cancers = (
-            count_amino_acid_change_haemonc_cancers(
-                haemonc_data=haemonc_rows,
-                genie_data=genie_data,
-                haemonc_patient_total=haemonc_cancer_patient_total,
-            )
+        print(datetime.now(), "Merging amino acid counts with haemonc counts")
+        amino_acid_counts_haemonc_cancers = count_amino_acid_change(
+            df=haemonc_rows,
+            unique_patient_total=haemonc_cancer_patient_total,
+            count_type="Haemonc_Cancers",
+            all_variants_df=genie_data,
         )
 
         merged_aa_haemonc_counts = pd.merge(
@@ -258,15 +254,15 @@ def main():
             how="left",
         )
 
+        print(datetime.now(), "Merging truncating variants with counts")
         truncating_variants_haemonc = get_truncating_variants(df=haemonc_rows)
         truncating_variants_haemonc_position = extract_position_affected(
             df=truncating_variants_haemonc
         )
-        frameshift_counts_haemonc = (
-            count_frameshift_truncating_and_nonsense_haemonc_cancers(
-                df=truncating_variants_haemonc_position,
-                patient_total=haemonc_cancer_patient_total,
-            )
+        frameshift_counts_haemonc = count_frameshift_truncating_and_nonsense(
+            df=truncating_variants_haemonc_position,
+            patient_total=haemonc_cancer_patient_total,
+            cancer_count_type="Haemonc_Cancers",
         )
 
         merged_frameshift_ho = merge_truncating_variant_counts_haemonc(
@@ -280,8 +276,9 @@ def main():
             inframe_deletions_haemonc
         )
         inframe_deletions_count_haemonc_cancers = (
-            count_nested_inframe_deletions_haemonc_cancers(
+            count_nested_inframe_deletions(
                 inframe_deletions_df=inframe_deletions_haemonc_positions,
+                cancer_count_type="Haemonc_Cancers",
                 patient_total=haemonc_cancer_patient_total,
             )
         )

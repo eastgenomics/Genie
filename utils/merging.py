@@ -21,7 +21,7 @@ def multi_merge(base_df, merge_dfs, on, how="left"):
     pd.DataFrame
         Merged DataFrame.
     """
-    merged = base_df.copy()
+    merged = base_df
     for df in merge_dfs:
         merged = pd.merge(merged, df, on=on, how=how)
     return merged
@@ -97,6 +97,7 @@ def merge_inframe_deletions_with_counts(
     pd.DataFrame
         Merged DataFrame with inframe deletion counts
     """
+    print("Merging inframe deletion counts with each other")
     merged_counts = multi_merge(
         inframe_deletions_count_all_cancers,
         [inframe_deletions_count_per_cancer],
@@ -112,7 +113,7 @@ def merge_inframe_deletions_with_counts(
         )[["Hugo_Symbol", "grch38_description", "del_start", "del_end"]]
     )
 
-    print("Merging positions and counts")
+    print("Merging inframe positions and counts")
     # Merge positions and counts
     inframe_deletions_with_counts = pd.merge(
         inframe_with_positions_no_dups,
@@ -121,6 +122,13 @@ def merge_inframe_deletions_with_counts(
         how="left",
     )
 
+    for df in [merged_frameshift_counts, inframe_deletions_with_counts]:
+        for col in ["Hugo_Symbol"]:
+            if df[col].dtype == "object":
+                df[col] = df[col].astype("category")
+
+    print("Merging final inframe counts with all counts")
+    # Make a MultiIndex for fast lookup
     merged = pd.merge(
         merged_frameshift_counts,
         inframe_deletions_with_counts,
