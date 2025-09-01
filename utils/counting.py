@@ -30,7 +30,7 @@ def count_same_nucleotide_change(
     """
     # Group by variant, count patients, adding patient N to column name
     nucleotide_change_counts = (
-        df.groupby("grch38_description")
+        df.groupby("grch38_description", observed=True)
         .agg({"PATIENT_ID": "nunique"})
         .rename(
             columns={
@@ -86,7 +86,7 @@ def count_same_nucleotide_change_per_cancer_type(
     """
     # Group by variant and cancer type and count patients
     per_cancer_counts = (
-        df.groupby(["grch38_description", "CANCER_TYPE"])
+        df.groupby(["grch38_description", "CANCER_TYPE"], observed=True)
         .agg(patient_count=("PATIENT_ID", "nunique"))
         .reset_index()
     )
@@ -141,7 +141,7 @@ def count_amino_acid_change(
     # Group by gene and amino acid changes and count patients, adding
     # patient N to the column name
     amino_acid_change_counts = (
-        df.groupby(["Hugo_Symbol", "HGVSp"])
+        df.groupby(["Hugo_Symbol", "HGVSp"], observed=True)
         .agg({"PATIENT_ID": "nunique"})
         .rename(
             columns={
@@ -201,7 +201,7 @@ def count_amino_acid_change_per_cancer_type(
     """
     # Count how many patients have same amino acid change for each cancer type
     amino_acid_count_per_present_cancer = (
-        df.groupby(["Hugo_Symbol", "HGVSp", "CANCER_TYPE"])
+        df.groupby(["Hugo_Symbol", "HGVSp", "CANCER_TYPE"], observed=True)
         .agg(patient_count=("PATIENT_ID", "nunique"))
         .reset_index()
     )
@@ -337,7 +337,7 @@ def count_frameshift_truncating_and_nonsense(
     """
     # For each gene, add counts at each position or downstream
     result = (
-        df.groupby("Hugo_Symbol")
+        df.groupby("Hugo_Symbol", observed=True)
         .apply(count_patients_with_variant_at_same_position_or_downstream)
         .reset_index(level=1, drop=True)
         .reset_index()
@@ -377,7 +377,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
     """
     # Apply per gene and cancer type to get counts at each present position
     result = (
-        df.groupby(["Hugo_Symbol", "CANCER_TYPE"])
+        df.groupby(["Hugo_Symbol", "CANCER_TYPE"], observed=True)
         .apply(count_patients_with_variant_at_same_position_or_downstream)
         .reset_index()
     )
@@ -560,7 +560,7 @@ def count_nested_inframe_deletions(
         DataFrame with counts of matching or nested inframe deletions.
     """
     inframe_counts = (
-        inframe_deletions_df.groupby("Hugo_Symbol")
+        inframe_deletions_df.groupby("Hugo_Symbol", observed=True)
         .apply(count_patients_with_nested_deletions)
         .reset_index(level=1, drop=True)
         .reset_index()
