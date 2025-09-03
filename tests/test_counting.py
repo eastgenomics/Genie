@@ -1,10 +1,10 @@
-import numpy as np
 import os
 import pandas as pd
+import polars as pl
 import sys
 
-from pandas.testing import assert_frame_equal
-import pytest
+from pandas.testing import assert_frame_equal_pd
+from polars.testing import assert_frame_equal as assert_frame_equal
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.counting
@@ -12,7 +12,7 @@ import utils.counting
 
 class TestCountSameNucleotideChangeAllCancers:
     def test_count_same_nucleotide_change_all_cancers_multiple_patients(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -35,17 +35,19 @@ class TestCountSameNucleotideChangeAllCancers:
             df, 100, "All_Cancers"
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "grch38_description": ["1_100_A_T", "2_200_G_C", "3_300_T_G"],
                 "SameNucleotideChange.All_Cancers_Count_N_100": [1, 2, 1],
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
     def test_count_same_nucleotide_change_all_cancers_single_patient(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "grch38_description": ["1_100_A_T", "1_100_A_T"],
                 "PATIENT_ID": ["patient_1", "patient_1"],
@@ -56,19 +58,21 @@ class TestCountSameNucleotideChangeAllCancers:
             df, 100, "All_Cancers"
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "grch38_description": ["1_100_A_T"],
                 "SameNucleotideChange.All_Cancers_Count_N_100": [1],
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class CountSameNucleotideChangePerCancerType:
     def test_count_same_nucleotide_change_per_cancer_type(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -106,7 +110,7 @@ class CountSameNucleotideChangePerCancerType:
             df, unique_patients_per_cancer
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "grch38_description": ["1_100_A_T", "2_200_G_C", "3_300_T_G"],
                 "SameNucleotideChange.T-Lymphoblastic Leukemia/Lymphoma_Count_N_10": [
@@ -121,12 +125,14 @@ class CountSameNucleotideChangePerCancerType:
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountNucleotideChangeHaemoncCancers:
     def test_count_same_nucleotide_change_haemonc_cancers(self):
-        haemonc_rows = pd.DataFrame(
+        haemonc_rows = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -152,7 +158,7 @@ class TestCountNucleotideChangeHaemoncCancers:
             }
         )
 
-        all_rows = pd.DataFrame(
+        all_rows = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -185,7 +191,7 @@ class TestCountNucleotideChangeHaemoncCancers:
             haemonc_rows, 1000, "Haemonc_Cancers", all_rows
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -202,12 +208,14 @@ class TestCountNucleotideChangeHaemoncCancers:
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountAminoAcidChangeAllCancers:
     def test_count_amino_acid_change_all_cancers_when_amino_acid_same(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -247,7 +255,7 @@ class TestCountAminoAcidChangeAllCancers:
                     "p.Gly200Cys",
                     "p.Arg400Gln",
                     "p.Arg400Gln",
-                    np.nan,
+                    None,
                 ],
             }
         )
@@ -256,7 +264,7 @@ class TestCountAminoAcidChangeAllCancers:
             df, 16000, "All_Cancers"
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE2", "GENE3"],
                 "HGVSp": [
@@ -269,12 +277,14 @@ class TestCountAminoAcidChangeAllCancers:
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountAminoAcidChangePerCancerType:
     def test_count_amino_acid_change_per_cancer_type(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -324,7 +334,7 @@ class TestCountAminoAcidChangePerCancerType:
                     "p.Gly200Cys",
                     "p.Arg400Gln",
                     "p.Arg400Gln",
-                    np.nan,
+                    None,
                 ],
             }
         )
@@ -340,7 +350,7 @@ class TestCountAminoAcidChangePerCancerType:
             df, unique_patients_per_cancer
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE2", "GENE3"],
                 "HGVSp": [
@@ -361,12 +371,14 @@ class TestCountAminoAcidChangePerCancerType:
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountAminoAcidChangeHaemoncCancers:
     def test_count_amino_acid_change_haemonc_cancers(self):
-        haemonc_rows = pd.DataFrame(
+        haemonc_rows = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -406,7 +418,7 @@ class TestCountAminoAcidChangeHaemoncCancers:
             }
         )
 
-        all_variants = pd.DataFrame(
+        all_variants = pl.from_dict(
             {
                 "grch38_description": [
                     "1_100_A_T",
@@ -455,7 +467,7 @@ class TestCountAminoAcidChangeHaemoncCancers:
             haemonc_rows, 1000, "Haemonc_Cancers", all_variants
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE2", "GENE3", "GENE4"],
                 "HGVSp": [
@@ -473,29 +485,44 @@ class TestCountAminoAcidChangeHaemoncCancers:
             }
         )
 
-        assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestExtractPositionFromCDS:
-    @pytest.mark.parametrize(
-        "hgvsc_value, expected",
-        [
-            (np.nan, None),
-            ([], None),
-            ("ENST00000269305.4:c.637C>T", 637),
-            ("ENST00000278616.4:c.1027_1030del", 1027),
-        ],
-    )
-    def test_extract_position_from_cds_return_none_when_input_not_str(
-        self, hgvsc_value, expected
-    ):
-        result = utils.counting.extract_position_from_cds(hgvsc_value)
-        assert result == expected
+    def test_extract_position_from_cds(self):
+        df = pl.from_dict(
+            {
+                "HGVSc": [
+                    "ENST00000269305.4:c.637C>T",
+                    "ENST00000278616.4:c.1027_1030del",
+                    "ENST00000269305.4:c.637del",
+                ]
+            }
+        )
+
+        result = utils.counting.extract_position_from_cds(df)
+
+        expected = pl.from_dict(
+            {
+                "HGVSc": [
+                    "ENST00000269305.4:c.637C>T",
+                    "ENST00000278616.4:c.1027_1030del",
+                    "ENST00000269305.4:c.637del",
+                ],
+                "CDS_position": [637, 1027, 637],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountPatientsWithVariantAtSamePositionOrDownstream:
-    def test_count_patients_with_variant_at_same_position_or_downstream(self):
-        df = pd.DataFrame(
+    def test_count_downstream(self):
+        df = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -536,12 +563,21 @@ class TestCountPatientsWithVariantAtSamePositionOrDownstream:
             }
         )
 
-        result = utils.counting.count_patients_with_variant_at_same_position_or_downstream(
-            df
-        )
+        result = utils.counting.count_downstream(df)
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                ],
                 "CDS_position": [
                     480,
                     481,
@@ -557,12 +593,14 @@ class TestCountPatientsWithVariantAtSamePositionOrDownstream:
             }
         )
 
-        pd.testing.assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountFrameshiftTruncatingAndNonsenseInCancers:
     def test_count_frameshift_truncating_and_nonsense(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -598,7 +636,7 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
             df, "All_Cancers", 500
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -620,7 +658,9 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
             }
         )
 
-        pd.testing.assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
@@ -732,26 +772,40 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
             }
         )
 
-        pd.testing.assert_frame_equal(result, expected)
+        assert_frame_equal_pd(result, expected)
 
 
 class TestExtractHGVScDeletionPositions:
-    @pytest.mark.parametrize(
-        "hgvsc_value, expected",
-        [
-            ("ENST00000269305.4:c.480_485del", (480, 485)),
-            ("ENST00000296930.5:c.511_524+1del", (511, 524)),
-            ("ENST00000269305.4:c.480del", (480, 480)),
-        ],
-    )
-    def test_extract_hgvsc_deletion_positions(self, hgvsc_value, expected):
-        result = utils.counting.extract_hgvsc_deletion_positions(hgvsc_value)
-        assert result == expected
+    def test_add_deletion_positions(self):
+        df = pl.from_dict(
+            {
+                "HGVSc": [
+                    "ENST00000269305.4:c.480_485del",
+                    "ENST00000296930.5:c.511_524+1del",
+                    "ENST00000269305.4:c.480del",
+                ]
+            }
+        )
+        result = utils.counting.add_deletion_positions(df)
+        expected = pl.from_dict(
+            {
+                "HGVSc": [
+                    "ENST00000269305.4:c.480_485del",
+                    "ENST00000296930.5:c.511_524+1del",
+                    "ENST00000269305.4:c.480del",
+                ],
+                "del_start": [480, 511, 480],
+                "del_end": [485, 524, 480],
+            }
+        )
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountPatientsWithNestedDeletions:
     def test_count_patients_with_nested_deletions(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -790,7 +844,7 @@ class TestCountPatientsWithNestedDeletions:
 
         result = utils.counting.count_patients_with_nested_deletions(df)
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "del_start": [480, 481, 483, 484, 485],
                 "del_end": [485, 482, 484, 485, 485],
@@ -798,12 +852,14 @@ class TestCountPatientsWithNestedDeletions:
             }
         )
 
-        pd.testing.assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestCountNestedInframeDeletionsAllCancers:
     def test_count_nested_inframe_deletions_all_cancers(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -844,7 +900,7 @@ class TestCountNestedInframeDeletionsAllCancers:
             df, "All_Cancers", 5000
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -865,12 +921,14 @@ class TestCountNestedInframeDeletionsAllCancers:
             }
         )
 
-        pd.testing.assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_row_order=False, check_column_order=False
+        )
 
 
 class TestCountNestedInframeDeletionsPerCancerType:
     def test_count_nested_inframe_deletions_per_cancer_type(self):
-        df = pd.DataFrame(
+        df = pl.from_dict(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -925,7 +983,7 @@ class TestCountNestedInframeDeletionsPerCancerType:
             df, per_patient_cancer_total
         )
 
-        expected = pd.DataFrame(
+        expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE1", "GENE1", "GENE1"],
                 "del_start": [480, 481, 483, 484, 485],
@@ -968,4 +1026,6 @@ class TestCountNestedInframeDeletionsPerCancerType:
             }
         )
 
-        pd.testing.assert_frame_equal(result, expected)
+        assert_frame_equal(
+            result, expected, check_row_order=False, check_column_order=False
+        )
