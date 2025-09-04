@@ -54,12 +54,12 @@ def remove_disallowed_chars_from_columns(genie_data):
 
     Parameters
     ----------
-    genie_data : pd.DataFrame
+    genie_data : pl.DataFrame
         DataFrame containing variant counts and descriptions
 
     Returns
     -------
-    genie_counts : pd.DataFrame
+    genie_counts : pl.DataFrame
         DataFrame with modified column names and values for VCF compatibility
     """
     # Replace disallowed characters in column names
@@ -113,7 +113,7 @@ def generate_info_field_header_info(genie_counts):
 
     Parameters
     ----------
-    genie_counts : pd.DataFrame
+    genie_counts : pl.DataFrame
         DataFrame containing variant counts and descriptions
 
     Returns
@@ -144,8 +144,8 @@ def generate_info_field_header_info(genie_counts):
                     ),
                 }
             )
-        # If it's the Genie description or grch37_norm then write what
-        # these actually are
+        # If it's the Genie description or grch37_norm then write as str
+        # with specific descriptions
         elif column == "Genie_description":
             info_fields.append(
                 {
@@ -171,6 +171,7 @@ def generate_info_field_header_info(genie_counts):
         # Skip this as it's already in CHROM, POS, REF, ALT
         elif column == "grch38_description":
             continue
+        # Otherwise it's a field in Genie data itself, write as str
         else:
             info_fields.append(
                 {
@@ -224,7 +225,7 @@ def write_variants_to_vcf(
 
     Parameters
     ----------
-    genie_counts : pd.DataFrame
+    genie_counts : pl.DataFrame
         Dataframe with one row per variant with counts and all other
         information aggregated per variant
     output_vcf : str
@@ -272,14 +273,11 @@ def write_variants_to_vcf(
         genie_counts.iter_rows(named=True), total=genie_counts.height
     ):
         if row["chrom"] is None or row["pos"] is None:
-            print(f"Invalid grch38_description format: {e}")
+            print(
+                "Invalid grch38_description format:"
+                f" {row['grch38_description']}, skipping."
+            )
             continue
-        # # Split out chromosome, position, reference, and alternate alleles
-        # try:
-        #     chrom, pos, ref, alt = row.grch38_description.split("_")
-        # except (AttributeError, ValueError) as e:
-        #     print(f"Invalid grch38_description format: {e}")
-        #     continue
 
         # Format the INFO field values according to the converters
         formatted_info_fields = {}
