@@ -20,7 +20,7 @@ from utils.counting import (
     count_frameshift_truncating_and_nonsense,
     count_frameshift_truncating_and_nonsense_per_cancer_type,
     add_deletion_positions,
-    extract_position_from_cds,
+    extract_position_from_hgvsc,
     count_nested_inframe_deletions,
     count_nested_inframe_deletions_per_cancer_type,
 )
@@ -172,7 +172,7 @@ def main():
         "PATIENT_ID",
         "CANCER_TYPE",
     )
-    truncating_variants = extract_position_from_cds(truncating_variants)
+    truncating_variants = extract_position_from_hgvsc(truncating_variants)
 
     print(datetime.now(), "Truncating counts all cancers")
     truncating_counts_all_cancers = count_frameshift_truncating_and_nonsense(
@@ -279,7 +279,7 @@ def main():
 
         print(datetime.now(), "Haemonc truncating counts")
         truncating_variants_haemonc = get_truncating_variants(df=haemonc_rows)
-        truncating_variants_haemonc = extract_position_from_cds(
+        truncating_variants_haemonc = extract_position_from_hgvsc(
             df=truncating_variants_haemonc
         )
         frameshift_counts_haemonc = count_frameshift_truncating_and_nonsense(

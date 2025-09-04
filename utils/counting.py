@@ -8,7 +8,7 @@ def count_same_nucleotide_change(
     all_variants_df: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """
-    Count how many patients have the same exact variant across all cancers (Polars version).
+    Count how many patients have the same exact variant across all cancers.
 
     Parameters
     ----------
@@ -17,7 +17,7 @@ def count_same_nucleotide_change(
     unique_patient_total : int
         Total number of unique patients for the count type
     count_type: str
-        Type of count being performed (e.g. "all_cancers", "per_cancer")
+        Type of count being performed (e.g. "All_Cancers", "Haemonc_Cancers")
     all_variants_df : pl.DataFrame, optional
         Reference dataset to ensure all variants included (used for grouped
         counts like haemonc or solid cancer)
@@ -36,9 +36,8 @@ def count_same_nucleotide_change(
         pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col)
     )
 
-    # If this is a grouped (e.g. haemonc cancer) count, then we want all
-    # variants to have a count, so add 0 if variant not present in the grouped
-    # count
+    # If this is a grouped (e.g. haemonc cancer) count, all variants should
+    # have a count -> add 0 if var not present in the grouped count
     if all_variants_df is not None:
         all_variants = all_variants_df.select("grch38_description").unique()
 
@@ -58,7 +57,7 @@ def count_same_nucleotide_change_per_cancer_type(
     df: pl.DataFrame, unique_patients_per_cancer: dict
 ) -> pl.DataFrame:
     """
-    Count how many patients have the exact variant per cancer type using Polars.
+    Count how many patients have the exact variant per cancer type.
 
     Parameters
     ----------
@@ -139,9 +138,8 @@ def count_amino_acid_change(
         .agg(pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col))
     )
 
-    # If this is a grouped (e.g. haemonc cancer) count, then we want all
-    # HGVSp to have a count, so add 0 if variant not present in the grouped
-    # count
+    # If this is a grouped (e.g. haemonc cancer) count, then all variants
+    #  with HGVSp should have a count, so add 0 if not present in grouped count
     if all_variants_df is not None:
         result = (
             all_variants_df.filter(pl.col("HGVSp").is_not_null())
@@ -216,7 +214,7 @@ def count_amino_acid_change_per_cancer_type(
     return aa_per_cancer_counts
 
 
-def extract_position_from_cds(df: pl.DataFrame) -> pl.DataFrame:
+def extract_position_from_hgvsc(df: pl.DataFrame) -> pl.DataFrame:
     """
     Extract the position affected from the HGVSc string for frameshift
     (truncating) and nonsense variants and add new columns.
@@ -230,7 +228,7 @@ def extract_position_from_cds(df: pl.DataFrame) -> pl.DataFrame:
     -------
     pl.DataFrame
         DataFrame with an additional column 'CDS_position'
-        containing the first aa affected
+        containing the position affected
     """
     return df.with_columns(
         pl.col("HGVSc")
@@ -286,7 +284,7 @@ def count_frameshift_truncating_and_nonsense(
 ) -> pl.DataFrame:
     """
     Count unique patients with frameshift or nonsense variants at the same
-    CDS_position or downstream for each gene, using Polars.
+    CDS_position or downstream for each gene.
 
     Parameters
     ----------
@@ -327,7 +325,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
 
     all_results = []
 
-    # Step 2: Iterate over each gene-cancer combination
+    # Iterate over each gene-cancer combination
     for row in gene_cancer_combinations.iter_rows(named=True):
         gene = row["Hugo_Symbol"]
         cancer = row["CANCER_TYPE"]
@@ -361,7 +359,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
             )
             all_results.append(result_df)
 
-    # Step 3: Combine all results
+    # Combine all results
     if all_results:
         combined = pl.concat(all_results, how="vertical")
     else:
@@ -374,7 +372,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
             }
         )
 
-    # Step 4: Build full cross join for missing combinations
+    # Build full cross join for missing combinations
     full_index = df.select(["Hugo_Symbol", "CDS_position"]).unique()
     all_cancers = pl.DataFrame(
         {"CANCER_TYPE": list(per_cancer_patient_total.keys())}
@@ -385,7 +383,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
         "key"
     )
 
-    # Step 5: Left join counts onto full index and fill missing with 0
+    # Left join counts onto full index and fill missing with 0
     filled = full_index.join(
         combined, on=["Hugo_Symbol", "CANCER_TYPE", "CDS_position"], how="left"
     )
@@ -393,7 +391,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
         pl.col("downstream_patient_count").fill_null(0).cast(pl.Int32)
     )
 
-    # Step 6: Pivot so each cancer type becomes a column
+    # Pivot so each cancer type becomes a column
     pivoted = filled.pivot(
         values="downstream_patient_count",
         index=["Hugo_Symbol", "CDS_position"],
@@ -405,7 +403,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
         if col not in ["Hugo_Symbol", "CDS_position"]:
             pivoted = pivoted.with_columns(pl.col(col).cast(pl.Int64))
 
-    # Step 7: Rename columns to include patient totals
+    # Rename columns to include patient totals
     new_column_names = {}
     for col in pivoted.columns:
         if col in per_cancer_patient_total:

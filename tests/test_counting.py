@@ -496,8 +496,8 @@ class TestCountAminoAcidChangeHaemoncCancers:
         )
 
 
-class TestExtractPositionFromCDS:
-    def test_extract_position_from_cds(self):
+class TestExtractPositionFromHGVSc:
+    def test_extract_position_from_hgvsc(self):
         df = pl.from_dict(
             {
                 "HGVSc": [
@@ -508,7 +508,7 @@ class TestExtractPositionFromCDS:
             }
         )
 
-        result = utils.counting.extract_position_from_cds(df)
+        result = utils.counting.extract_position_from_hgvsc(df)
 
         expected = pl.from_dict(
             {
