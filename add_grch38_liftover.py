@@ -246,61 +246,6 @@ def merge_dataframes(
     return liftover_rows
 
 
-def order_output_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Order the columns of the DataFrame to match the desired output format.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to reorder columns for
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with reordered columns
-    """
-    desired_order = [
-        "Hugo_Symbol",
-        "Chromosome",
-        "Start_Position",
-        "End_Position",
-        "Strand",
-        "Reference_Allele",
-        "Tumor_Seq_Allele2",
-        "Tumor_Sample_Barcode",
-        "Transcript_ID",
-        "RefSeq",
-        "Protein_position",
-        "Codons",
-        "Exon_Number",
-        "PATIENT_ID",
-        "SAMPLE_ID",
-        "AGE_AT_SEQ_REPORT",
-        "ONCOTREE_CODE",
-        "SAMPLE_TYPE",
-        "SEQ_ASSAY_ID",
-        "CANCER_TYPE",
-        "CANCER_TYPE_DETAILED",
-        "SAMPLE_TYPE_DETAILED",
-        "SAMPLE_CLASS",
-        "variant_description",
-        "chrom_grch38",
-        "pos_grch38",
-        "ref_grch38",
-        "alt_grch38",
-        "Genie_description",
-        "grch37_norm",
-        "grch38_description",
-        "Consequence",
-        "HGVSc",
-        "HGVSp",
-        "Variant_Type",
-        "Variant_Classification",
-    ]
-    return df[desired_order]
-
-
 def main():
     args = parse_args()
     # Read in Genie data, stripping any whitespace from some fields
@@ -327,7 +272,6 @@ def main():
         raise FileNotFoundError(f"VCF file {args.vcf} does not exist.")
     vcf_df = read_vcf_to_df(args.vcf)
     merged_df = merge_dataframes(genie_data_sample_info_unique_key, vcf_df)
-    merged_df = order_output_columns(merged_df)
     merged_df.to_csv(args.output, sep="\t", index=False)
 
 

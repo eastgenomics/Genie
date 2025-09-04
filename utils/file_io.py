@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import polars as pl
 import pysam
 import json
 import sys
@@ -50,39 +49,6 @@ def read_in_to_df(
             header=header,
             dtype=dtype,
             converters=converters,
-        )
-        return df
-    except Exception as e:
-        raise RuntimeError(f"Failed to read '{filename}': {e}") from e
-
-
-def read_in_to_polars_df(
-    filename: str,
-    sep: str = "\t",
-) -> pl.DataFrame:
-    """
-    Read in file to Polars DataFrame.
-
-    Parameters
-    ----------
-    filename : str
-        File to read
-    sep : str, optional
-        Column separator, by default "\t"
-
-    Returns
-    -------
-    pl.DataFrame
-    """
-    try:
-        df = pl.read_csv(
-            filename,
-            separator=sep,
-            schema_overrides={
-                "AGE_AT_SEQ_REPORT": pl.Utf8,
-                "Chromosome": pl.Utf8,
-                "chrom_grch38": pl.Utf8,
-            },
         )
         return df
     except Exception as e:
