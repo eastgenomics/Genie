@@ -1,6 +1,4 @@
-import pandas as pd
 import polars as pl
-import re
 
 
 def count_same_nucleotide_change(
@@ -39,7 +37,8 @@ def count_same_nucleotide_change(
     )
 
     # If this is a grouped (e.g. haemonc cancer) count, then we want all
-    # variants to have a count, so add 0 if not present
+    # variants to have a count, so add 0 if variant not present in the grouped
+    # count
     if all_variants_df is not None:
         all_variants = all_variants_df.select("grch38_description").unique()
 
@@ -86,7 +85,7 @@ def count_same_nucleotide_change_per_cancer_type(
         aggregate_function="first",
     )
 
-    # Fill missing values with 0
+    # Fill missing cancer count values with 0
     all_cancer_counts = all_cancer_counts.fill_null(0)
 
     # Rename columns to include patient N per cancer type
@@ -140,9 +139,13 @@ def count_amino_acid_change(
         .agg(pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col))
     )
 
+    # If this is a grouped (e.g. haemonc cancer) count, then we want all
+    # HGVSp to have a count, so add 0 if variant not present in the grouped
+    # count
     if all_variants_df is not None:
         result = (
-            all_variants_df.select(["Hugo_Symbol", "HGVSp"])
+            all_variants_df.filter(pl.col("HGVSp").is_not_null())
+            .select("grch38_description", "Hugo_Symbol", "HGVSp")
             .unique()
             .join(
                 amino_acid_change_counts,
@@ -194,7 +197,7 @@ def count_amino_acid_change_per_cancer_type(
     aa_per_cancer_counts = amino_acid_count_per_present_cancer.pivot(
         values="patient_count",
         index=["Hugo_Symbol", "HGVSp"],
-        columns="CANCER_TYPE",
+        on="CANCER_TYPE",
         aggregate_function="first",
     ).fill_null(0)
 
@@ -235,82 +238,6 @@ def extract_position_from_cds(df: pl.DataFrame) -> pl.DataFrame:
         .cast(pl.Int64)
         .alias("CDS_position")
     )
-
-
-def count_patients_with_variant_at_same_position_or_downstream(gene_group):
-    """
-    Count how many unique patients have a variant at the same position or
-    downstream for rows in the same gene.
-
-    Parameters
-    ----------
-    group : pd.DataFrame
-        DataFrame containing variants in the same gene
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with CDS_position and downstream_patient_count
-    """
-    gene_group = gene_group.copy()
-    gene_group["CDS_position"] = pd.to_numeric(
-        gene_group["CDS_position"], errors="coerce"
-    )
-
-    # Loop over each unique position, get rows with the same position or later
-    # then count how many unique patients that represents
-    unique_positions = sorted(gene_group["CDS_position"].unique())
-    result_rows = []
-    for pos in unique_positions:
-        same_or_downstream = gene_group[gene_group["CDS_position"] >= pos]
-        count = same_or_downstream["PATIENT_ID"].nunique()
-        result_rows.append(
-            {"CDS_position": pos, "downstream_patient_count": count}
-        )
-    return pd.DataFrame(result_rows)
-
-
-def count_frameshift_truncating_and_nonsense_pd(
-    df: pd.DataFrame,
-    cancer_count_type: str,
-    patient_total: int,
-) -> pd.DataFrame:
-    """
-    Count how many patients have a frameshift (truncating) or nonsense variant
-    at the same position or downstream in the same gene.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing truncating variants with position
-    cancer_count_type : str
-        the cancer count type, to include in name of the column
-    patient_total : int
-        Total number of unique patients in the dataset.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with frameshift (truncating) and nonsense counts
-    """
-    # For each gene, add counts at each position or downstream
-    result = (
-        df.groupby("Hugo_Symbol")
-        .apply(count_patients_with_variant_at_same_position_or_downstream)
-        .reset_index(level=1, drop=True)
-        .reset_index()
-    )
-
-    # Rename column to add patient N
-    result = result.rename(
-        columns={
-            "downstream_patient_count": (
-                f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
-            )
-        }
-    )
-
-    return result
 
 
 def count_downstream(group: pl.DataFrame) -> pl.DataFrame:
@@ -385,140 +312,110 @@ def count_frameshift_truncating_and_nonsense(
 
 
 def count_frameshift_truncating_and_nonsense_per_cancer_type(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     per_cancer_patient_total: dict,
 ):
     """
     Count how many patients have a frameshift (truncating) or nonsense variant
     at the same position or downstream in the same gene per cancer type.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing truncating variants with position
-    per_cancer_patient_total : dict
-        Total number of unique patients in the dataset per cancer type
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with frameshift (truncating) and nonsense counts per cancer
     """
-    # Apply per gene and cancer type to get counts at each present position
-    result = (
-        df.groupby(["Hugo_Symbol", "CANCER_TYPE"])
-        .apply(count_patients_with_variant_at_same_position_or_downstream)
-        .reset_index()
-    )
-
-    # Get all unique gene + CDS position pairs
-    full_index = (
-        df.groupby("Hugo_Symbol")["CDS_position"]
+    gene_cancer_combinations = (
+        df.select(["Hugo_Symbol", "CANCER_TYPE"])
         .unique()
-        .explode()
-        .reset_index()
-        .rename(columns={0: "CDS_position"})
+        .sort(["Hugo_Symbol", "CANCER_TYPE"])
     )
 
-    # Create all combinations with cancer types (cross join) and all gene
-    # and CDS positions
-    all_cancers = list(per_cancer_patient_total.keys())
-    full_index = (
-        full_index.assign(key=1)
-        .merge(pd.DataFrame({"CANCER_TYPE": all_cancers, "key": 1}), on="key")
-        .drop(columns="key")
+    all_results = []
+
+    # Step 2: Iterate over each gene-cancer combination
+    for row in gene_cancer_combinations.iter_rows(named=True):
+        gene = row["Hugo_Symbol"]
+        cancer = row["CANCER_TYPE"]
+
+        subset = df.filter(
+            (pl.col("Hugo_Symbol") == gene) & (pl.col("CANCER_TYPE") == cancer)
+        )
+
+        # Count downstream patients for each CDS position
+        positions = sorted(subset["CDS_position"].to_list())
+        patient_ids = subset["PATIENT_ID"].to_list()
+        rows = []
+        for pos in positions:
+            downstream_patients = {
+                pid
+                for j, pid in enumerate(patient_ids)
+                if subset["CDS_position"][j] >= pos
+            }
+            rows.append(
+                {
+                    "CDS_position": pos,
+                    "downstream_patient_count": len(downstream_patients),
+                }
+            )
+        if rows:
+            result_df = pl.DataFrame(rows).with_columns(
+                [
+                    pl.lit(gene).alias("Hugo_Symbol"),
+                    pl.lit(cancer).alias("CANCER_TYPE"),
+                ]
+            )
+            all_results.append(result_df)
+
+    # Step 3: Combine all results
+    if all_results:
+        combined = pl.concat(all_results, how="vertical")
+    else:
+        combined = pl.DataFrame(
+            {
+                "Hugo_Symbol": [],
+                "CANCER_TYPE": [],
+                "CDS_position": [],
+                "downstream_patient_count": [],
+            }
+        )
+
+    # Step 4: Build full cross join for missing combinations
+    full_index = df.select(["Hugo_Symbol", "CDS_position"]).unique()
+    all_cancers = pl.DataFrame(
+        {"CANCER_TYPE": list(per_cancer_patient_total.keys())}
+    )
+    full_index = full_index.with_columns(pl.lit(1).alias("key"))
+    all_cancers = all_cancers.with_columns(pl.lit(1).alias("key"))
+    full_index = full_index.join(all_cancers, on="key", how="inner").drop(
+        "key"
     )
 
-    # Merge actual counts with complete index and fill NAs with zeros
-    result_filled = full_index.merge(
-        result, on=["Hugo_Symbol", "CDS_position", "CANCER_TYPE"], how="left"
+    # Step 5: Left join counts onto full index and fill missing with 0
+    filled = full_index.join(
+        combined, on=["Hugo_Symbol", "CANCER_TYPE", "CDS_position"], how="left"
     )
-    result_filled["downstream_patient_count"] = (
-        result_filled["downstream_patient_count"].fillna(0).astype(int)
+    filled = filled.with_columns(
+        pl.col("downstream_patient_count").fill_null(0).cast(pl.Int32)
     )
 
-    # Pivot table so each row is a gene and CDS position pair and each column
-    # is a cancer type, filling any missing with zeros
-    per_cancer_pivot = result_filled.pivot_table(
-        index=["Hugo_Symbol", "CDS_position"],
-        columns="CANCER_TYPE",
+    # Step 6: Pivot so each cancer type becomes a column
+    pivoted = filled.pivot(
         values="downstream_patient_count",
-        fill_value=0,
-    ).reset_index()
+        index=["Hugo_Symbol", "CDS_position"],
+        on="CANCER_TYPE",
+        aggregate_function="first",
+    ).fill_null(0)
 
-    count_cols = per_cancer_pivot.columns.difference(
-        ["Hugo_Symbol", "CDS_position"]
-    )
-    per_cancer_pivot[count_cols] = per_cancer_pivot[count_cols].astype(int)
-    # Rename columns to include patient N per cancer type
-    new_columns = []
-    for col in per_cancer_pivot.columns:
+    for col in pivoted.columns:
+        if col not in ["Hugo_Symbol", "CDS_position"]:
+            pivoted = pivoted.with_columns(pl.col(col).cast(pl.Int64))
+
+    # Step 7: Rename columns to include patient totals
+    new_column_names = {}
+    for col in pivoted.columns:
         if col in per_cancer_patient_total:
-            new_columns.append(
+            new_column_names[col] = (
                 f"SameOrDownstreamTruncatingVariantsPerCDS.{col}_Count_N_{per_cancer_patient_total[col]}"
             )
-        else:
-            new_columns.append(col)
-    per_cancer_pivot.columns = new_columns
+    if new_column_names:
+        pivoted = pivoted.rename(new_column_names)
 
-    return per_cancer_pivot
-
-
-# def count_frameshift_truncating_and_nonsense_per_cancer_type_polars(
-#     df: pl.DataFrame,
-#     per_cancer_patient_total: dict,
-# ):
-#     """
-#     Count how many patients have a frameshift (truncating) or nonsense variant
-#     at the same position or downstream in the same gene per cancer type.
-#     """
-
-#     # Apply per gene and cancer type (this requires rewriting your custom function in Polars!)
-#     result = df.group_by(["Hugo_Symbol", "CANCER_TYPE"]).map_batches(
-#         count_downstream_pl
-#     )
-
-#     # # Ensure Polars DataFrame
-#     # result = pl.DataFrame(result)
-
-#     # Get all unique gene + CDS position pairs
-#     full_index = (
-#         df.group_by("Hugo_Symbol")
-#         .agg(pl.col("CDS_position").unique())
-#         .explode("CDS_position")
-#     )
-
-#     # Create all combinations with cancer types (cross join)
-#     all_cancers = pl.DataFrame(
-#         {"CANCER_TYPE": list(per_cancer_patient_total.keys())}
-#     )
-#     full_index = full_index.join(all_cancers, how="cross")
-
-#     # Merge actual counts with complete index and fill missing
-#     result_filled = full_index.join(
-#         result, on=["Hugo_Symbol", "CDS_position", "CANCER_TYPE"], how="left"
-#     ).with_columns(
-#         pl.col("downstream_patient_count").fill_null(0).cast(pl.Int64)
-#     )
-
-#     # Pivot so each row = gene/CDS, each col = cancer type
-#     per_cancer_pivot = result_filled.pivot(
-#         values="downstream_patient_count",
-#         index=["Hugo_Symbol", "CDS_position"],
-#         columns="CANCER_TYPE",
-#     ).fill_null(0)
-
-#     # Rename columns to include patient N
-#     rename_map = {}
-#     for col in per_cancer_pivot.columns:
-#         if col in per_cancer_patient_total:
-#             rename_map[col] = (
-#                 "SameOrDownstreamTruncatingVariantsPerCDS."
-#                 f"{col}_Count_N_{per_cancer_patient_total[col]}"
-#             )
-#     per_cancer_pivot = per_cancer_pivot.rename(rename_map)
-
-#     return per_cancer_pivot
+    return pivoted
 
 
 def add_deletion_positions(inframe_deletions: pl.DataFrame) -> pl.DataFrame:
@@ -544,19 +441,17 @@ def add_deletion_positions(inframe_deletions: pl.DataFrame) -> pl.DataFrame:
     """
     return inframe_deletions.with_columns(
         [
-            # Extract start position
             pl.col("HGVSc")
             .str.extract(r"c\.(\d+)[+-]?\d*_?(\d+)?[+-]?\d*del", group_index=1)
             .cast(pl.Int64)
             .alias("del_start"),
-            # Extract end position, defaulting to start if missing
             pl.col("HGVSc")
             .str.extract(r"c\.(\d+)[+-]?\d*_?(\d+)?[+-]?\d*del", group_index=2)
             .cast(pl.Int64)
             .alias("del_end"),
         ]
     ).with_columns(
-        # Fill missing del_end with del_start
+        # Fill missing del_end with del_start (if it's deletion at one pos)
         pl.when(pl.col("del_end").is_null())
         .then(pl.col("del_start"))
         .otherwise(pl.col("del_end"))
@@ -564,60 +459,22 @@ def add_deletion_positions(inframe_deletions: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def count_patients_with_nested_deletions_pd(gene_group):
+def count_patients_with_nested_deletions(
+    gene_group: pl.DataFrame,
+) -> pl.DataFrame:
     """
     Count how many unique patients have deletions that are the same positions
     or nested within the deletion in the same gene.
 
     Parameters
     ----------
-    gene_group : pd.DataFrame
+    gene_group : pl.DataFrame
         DataFrame containing deletions for a single gene (and optionally a cancer type)
 
     Returns
     -------
-    pd.DataFrame
+    pl.DataFrame
         DataFrame with del_start, del_end, and nested_patient_count
-    """
-    gene_group = gene_group.copy()
-
-    # Get all unique deletion ranges in that gene
-    unique_deletions = (
-        gene_group[["del_start", "del_end"]]
-        .drop_duplicates()
-        .sort_values(["del_start", "del_end"])
-    )
-
-    # Loop over each unique deletion and count how many patients have deletions
-    # that are the same positions or nested within it
-    result_rows = []
-    for _, row in unique_deletions.iterrows():
-        current_start = row["del_start"]
-        current_end = row["del_end"]
-
-        # Select deletions that are nested within the current one
-        nested = gene_group[
-            (gene_group["del_start"] >= current_start)
-            & (gene_group["del_end"] <= current_end)
-        ]
-
-        count = nested["PATIENT_ID"].nunique()
-        result_rows.append(
-            {
-                "del_start": current_start,
-                "del_end": current_end,
-                "nested_patient_count": count,
-            }
-        )
-
-    return pd.DataFrame(result_rows)
-
-
-def count_patients_with_nested_deletions(
-    gene_group: pl.DataFrame,
-) -> pl.DataFrame:
-    """
-    Count unique patients with deletions that are nested or equal in the same gene.
     """
     # Keep only unique deletion ranges
     unique_ranges = (
@@ -653,45 +510,6 @@ def count_patients_with_nested_deletions(
         )
 
     return pl.DataFrame(results)
-
-
-# def count_nested_inframe_deletions_pd(
-#     inframe_deletions_df: pd.DataFrame,
-#     cancer_count_type: str,
-#     patient_total: int,
-# ) -> pd.DataFrame:
-#     """
-#     Count the number of unique patients with inframe deletions that are either
-#     the same as or nested within the current deletion for all cancers.
-
-#     Parameters
-#     ----------
-#     inframe_deletions_df : pd.DataFrame
-#         DataFrame containing inframe deletions
-#     cancer_count_type : str
-#         The cancer count type, to include in name of the column
-#     patient_total : int
-#         Total number of unique patients in the dataset
-
-#     Returns
-#     -------
-#     pd.DataFrame
-#         DataFrame with counts of matching or nested inframe deletions.
-#     """
-#     inframe_counts = (
-#         inframe_deletions_df.groupby("Hugo_Symbol")
-#         .apply(count_patients_with_nested_deletions_pd)
-#         .reset_index(level=1, drop=True)
-#         .reset_index()
-#     ).rename(
-#         columns={
-#             "nested_patient_count": (
-#                 f"NestedInframeDeletionsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
-#             )
-#         }
-#     )
-
-#     return inframe_counts
 
 
 def count_nested_inframe_deletions(
@@ -849,7 +667,7 @@ def count_nested_inframe_deletions_per_cancer_type(
     # Step 5: Pivot table - each row is gene/CDS position, each column is cancer type
     per_cancer_pivot = nested_counts_filled.pivot(
         index=["Hugo_Symbol", "del_start", "del_end"],
-        columns="CANCER_TYPE",
+        on="CANCER_TYPE",
         values="nested_patient_count",
         aggregate_function="first",  # Should be unique combinations
     ).fill_null(
@@ -865,86 +683,5 @@ def count_nested_inframe_deletions_per_cancer_type(
 
     if column_mapping:
         per_cancer_pivot = per_cancer_pivot.rename(column_mapping)
-
-    return per_cancer_pivot
-
-
-def count_nested_inframe_deletions_per_cancer_type_pd(
-    inframe_deletions_df: pd.DataFrame, per_cancer_patient_total: dict
-) -> pd.DataFrame:
-    """
-    Count the number of unique patients with inframe deletions that are either
-    the same as or nested within the current deletion, grouped by cancer type.
-
-    Parameters
-    ----------
-    inframe_deletions_df : pd.DataFrame
-        DataFrame containing inframe deletions with patient information.
-    per_cancer_patient_total : dict
-        Total number of unique patients in the dataset per cancer type.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with counts of matching or nested inframe deletions per cancer type.
-    """
-    result = inframe_deletions_df.copy()
-    nested_per_cancer_counts = (
-        result.groupby(["Hugo_Symbol", "CANCER_TYPE"])
-        .apply(count_patients_with_nested_deletions)
-        .reset_index()
-    )
-
-    # Get unique combinations of genes and deletion start and ends
-    full_index = (
-        result[["Hugo_Symbol", "del_start", "del_end"]]
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
-
-    # Get combinations of all cancer types with all genes and deletion start
-    # and ends
-    all_cancers = list(per_cancer_patient_total.keys())
-    full_index = (
-        full_index.assign(key=1)
-        .merge(pd.DataFrame({"CANCER_TYPE": all_cancers, "key": 1}), on="key")
-        .drop(columns="key")
-    )
-
-    nested_counts_filled = full_index.merge(
-        nested_per_cancer_counts,
-        on=["Hugo_Symbol", "CANCER_TYPE", "del_start", "del_end"],
-        how="left",
-    )
-
-    nested_counts_filled["nested_patient_count"] = (
-        nested_counts_filled["nested_patient_count"].fillna(0).astype(int)
-    )
-
-    # Pivot table so each row is a gene and CDS position pair and each column
-    # is a cancer type, filling any missing with zeros
-    per_cancer_pivot = nested_counts_filled.pivot_table(
-        index=["Hugo_Symbol", "del_start", "del_end"],
-        columns="CANCER_TYPE",
-        values="nested_patient_count",
-        fill_value=0,
-    ).reset_index()
-
-    # Convert all count columns to int
-    count_cols = per_cancer_pivot.columns.difference(
-        ["Hugo_Symbol", "del_start", "del_end"]
-    )
-    per_cancer_pivot[count_cols] = per_cancer_pivot[count_cols].astype(int)
-
-    # Rename columns to include patient N per cancer type
-    new_columns = []
-    for col in per_cancer_pivot.columns:
-        if col in per_cancer_patient_total:
-            new_columns.append(
-                f"NestedInframeDeletionsPerCDS.{col}_Count_N_{per_cancer_patient_total[col]}"
-            )
-        else:
-            new_columns.append(col)
-    per_cancer_pivot.columns = new_columns
 
     return per_cancer_pivot

@@ -218,8 +218,13 @@ def unique_with_nan(list_of_values: list) -> list:
     list
         List of unique values, with NaN included if present.
     """
-    uniques = pd.unique([v for v in list_of_values if not pd.isna(v)]).tolist()
-    if pd.Series(list_of_values).isna().any():
+    arr = pd.Series(list_of_values, dtype=object)
+
+    # uniques without NaN (order-preserving)
+    uniques = pd.unique(arr[~arr.isna()]).tolist()
+
+    # Append NaN if present
+    if arr.isna().any():
         uniques.append(np.nan)
 
     return uniques

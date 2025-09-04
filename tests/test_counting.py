@@ -3,8 +3,8 @@ import pandas as pd
 import polars as pl
 import sys
 
-from pandas.testing import assert_frame_equal_pd
-from polars.testing import assert_frame_equal as assert_frame_equal
+from pandas.testing import assert_frame_equal as assert_frame_equal_pd
+from polars.testing import assert_frame_equal
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.counting
@@ -469,6 +469,12 @@ class TestCountAminoAcidChangeHaemoncCancers:
 
         expected = pl.from_dict(
             {
+                "grch38_description": [
+                    "1_100_A_T",
+                    "1_200_G_C",
+                    "4_101_T_G",
+                    "20_500_A_C",
+                ],
                 "Hugo_Symbol": ["GENE1", "GENE2", "GENE3", "GENE4"],
                 "HGVSp": [
                     "p.Ala100Thr",
@@ -664,8 +670,8 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
 
 
 class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
-    def test_count_frameshift_truncating_and_nonsense_per_cancer_type(self):
-        df = pd.DataFrame(
+    def test_count_frameshift_truncating_and_nonsense_per_cancer(self):
+        df = pl.DataFrame(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -718,7 +724,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
             df, unique_patients_per_cancer
         )
 
-        expected = pd.DataFrame(
+        expected = pl.DataFrame(
             {
                 "Hugo_Symbol": [
                     "GENE1",
@@ -772,7 +778,9 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
             }
         )
 
-        assert_frame_equal_pd(result, expected)
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
 
 
 class TestExtractHGVScDeletionPositions:

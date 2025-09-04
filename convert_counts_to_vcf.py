@@ -1,11 +1,11 @@
 import argparse
-import pandas as pd
+import polars as pl
 import pysam
 import re
 
 from tqdm import tqdm
 
-from utils.file_io import read_in_to_df, read_in_fasta
+from utils.file_io import read_in_to_polars_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,20 +62,19 @@ def remove_disallowed_chars_from_columns(genie_data):
     genie_counts : pd.DataFrame
         DataFrame with modified column names and values for VCF compatibility
     """
-    # Convert . to underscore in column names
-    genie_data.columns = genie_data.columns.str.replace(r"\.", "_", regex=True)
+    # Replace disallowed characters in column names
+    new_columns = []
+    for col in genie_data.columns:
+        col = re.sub(r"\.", "_", col)
+        col = re.sub(r"[\/\s,-]", "", col)
+        new_columns.append(col)
 
-    # Remove commas, hyphens, whitespaces, and slashes from column names
-    # to make them compatible with VCF format
-    genie_data.columns = genie_data.columns.str.replace(
-        r"[\/\s,-]", "", regex=True
-    )
+    genie_data = genie_data.rename(dict(zip(genie_data.columns, new_columns)))
 
+    # Replace commas with '&' in "Consequence" column if it exists
     if "Consequence" in genie_data.columns:
-        # Replace commas with '&' in the 'Consequence' column
-        # to make it compatible with VCF format
-        genie_data["Consequence"] = genie_data["Consequence"].str.replace(
-            ",", "&"
+        genie_data = genie_data.with_columns(
+            pl.col("Consequence").str.replace_all(",", "&")
         )
 
     return genie_data
@@ -133,9 +132,7 @@ def generate_info_field_header_info(genie_counts):
                 print("Skipping malformed column:", column)
                 continue
             count_type_description = camel_case_to_spaces(parts[0])
-            cancer_type_description = camel_case_to_spaces(parts[1]).replace(
-                "Total", "All Cancers"
-            )
+            cancer_type_description = camel_case_to_spaces(parts[1])
             info_fields.append(
                 {
                     "id": column,
@@ -255,22 +252,40 @@ def write_variants_to_vcf(
     # Write out variants as new records
     vcf_out = pysam.VariantFile(output_vcf, "w", header=header)
 
+    genie_counts = (
+        genie_counts.with_columns(
+            pl.col("grch38_description").str.split("_").alias("split_desc")
+        )
+        .with_columns(
+            [
+                pl.col("split_desc").list.get(0).alias("chrom"),
+                pl.col("split_desc").list.get(1).cast(pl.Int64).alias("pos"),
+                pl.col("split_desc").list.get(2).alias("ref"),
+                pl.col("split_desc").list.get(3).alias("alt"),
+            ]
+        )
+        .drop("split_desc")
+    )
+
     print("Writing variants to VCF file...")
     for row in tqdm(
-        genie_counts.itertuples(index=False), total=genie_counts.shape[0]
+        genie_counts.iter_rows(named=True), total=genie_counts.height
     ):
-        # Split out chromosome, position, reference, and alternate alleles
-        try:
-            chrom, pos, ref, alt = row.grch38_description.split("_")
-        except (AttributeError, ValueError) as e:
+        if row["chrom"] is None or row["pos"] is None:
             print(f"Invalid grch38_description format: {e}")
             continue
+        # # Split out chromosome, position, reference, and alternate alleles
+        # try:
+        #     chrom, pos, ref, alt = row.grch38_description.split("_")
+        # except (AttributeError, ValueError) as e:
+        #     print(f"Invalid grch38_description format: {e}")
+        #     continue
 
         # Format the INFO field values according to the converters
         formatted_info_fields = {}
         for field_name, converter in field_converters.items():
-            value = getattr(row, field_name, None)
-            if pd.notna(value):
+            value = row.get(field_name)
+            if value not in (None, "", float("nan")):
                 try:
                     formatted_info_fields[field_name] = converter(value)
                 except Exception as err:
@@ -279,15 +294,14 @@ def write_variants_to_vcf(
         # For each variant, write new variant record with all INFO fields
         # Take 1 away from start due to differences in Pysam representation
         record = vcf_out.new_record(
-            contig=str(chrom),
-            start=int(pos) - 1,
-            alleles=(ref, alt),
+            contig=str(row["chrom"]),
+            start=row["pos"] - 1,  # pysam uses 0-based
+            alleles=(row["ref"], row["alt"]),
             id=".",
             qual=None,
             filter=None,
             info=formatted_info_fields,
         )
-
         vcf_out.write(record)
 
     vcf_out.close()
@@ -299,13 +313,9 @@ def write_variants_to_vcf(
 
 def main():
     args = parse_args()
-    genie_counts = read_in_to_df(
+    genie_counts = read_in_to_polars_df(
         args.input,
         sep="\t",
-        header=0,
-        dtype={
-            "Start_Position": "Int64",
-        },
     )
     fasta = read_in_fasta(filename=args.fasta)
     genie_counts_renamed = remove_disallowed_chars_from_columns(genie_counts)
