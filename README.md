@@ -2,7 +2,8 @@
 This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to [UK Somatic Variant Intepretation Guidelines (S-VIG)](https://www.acgs.uk.com/media/12831/svig-uk_guidelines_v10_-_post-acgs_ratification_final_submit01.pdf) and its [supplementary information](https://www.acgs.uk.com/media/12832/svig-uk-supplementary-material-post-acgs-ratification-final.pdf).
 
 ### Convert MAF to VCF
-Each unique variant in the MAF data is required to be converted to VCF description in GRCh37 to enable liftover to GRCh38. A FASTA (sourced from Ensembl) is required for the GRCh37 reference genome, which can be retrieved from the Ensembl FTP site:
+Each unique variant in the MAF data is required to be converted to VCF description in GRCh37 to enable liftover to GRCh38. A FASTA (sourced from Ensembl) is required for the GRCh37 reference genome.
+These can be retrieved from the Ensembl FTP site:
 ```
 wget https://ftp.ensembl.org/pub/grch37/release-114/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 gzip -d Homo_sapiens.GRCh37.dna.toplevel.fa.gz
@@ -18,7 +19,7 @@ python convert_raw_maf_to_vcf.py \
 ```
 The script will print out any variants where the reference allele does not match the given FASTA file and remove them.
 
-Note: the VCF should then be sorted and normalised with bcftools and lifted over to GRCh38 with Picard LiftoverVcf:
+Note: the VCF should then be sorted and normalised with bcftools:
 ```
 bcftools sort data_mutations_extended.vcf \
   | bcftools norm -f Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
@@ -27,14 +28,13 @@ bcftools sort data_mutations_extended.vcf \
 
 
 ### Write out normalisation duplicates
-Variants in the Genie data are submitted by different institutions and are not necessarily normalised, meaning multiple descriptions of a variant in Genie may map to the same normalised GRCh37 description. Once the GRCh37 VCF is normalised with bcftools norm, we can extract the first instance of each normalisation duplicate from the normalised VCF:
+Variants in the Genie data are submitted by different institutions and are not normalised, meaning multiple descriptions of a variant in Genie may map to the same GRCh37 description after normalisation. Once the GRCh37 VCF is normalised with bcftools norm, we can extract the first instance of each normalisation duplicate from the normalised VCF:
 ```
 python write_normalisation_duplicates_to_vcf.py \
   --input data_mutations_extended_normalised.vcf.gz \
   --output data_mutations_extended_normalised_duplicates.vcf
 ```
-This VCF of duplicates should then be annotated with VEP to obtain the `Consequence,Feature,HGVSc,HGVSp` fields so that it can be used to correct the annotations for these duplicates in the Genie data. Example VEP command:
-
+This VCF of duplicates should then be annotated with VEP to obtain the `Consequence,Feature,HGVSc,HGVSp` fields so that it can be used to correct the annotations (`Consequence, Feature, HGVSc, HGVSp, Variant_Type, Variant_Classification`) for the rows which contain these duplicates in the Genie data. This is required because these annotations are used for counting. Example VEP command:
 ```
 docker run -v /home/Genie:/data -w /data <vep-image-id>>  \
   vep -i /data/data_mutations_extended_normalised_duplicates.vcf \
@@ -143,7 +143,7 @@ python merge_sample_info.py \
 
 
 ### Add GRCh38 liftover to Genie data
-The liftover information must now be added back to the Genie data.
+The liftover information can now be added back to the Genie data.
 Example command:
 ```
 python add_grch38_liftover.py \
@@ -153,7 +153,7 @@ python add_grch38_liftover.py \
 ```
 
 ### Fix normalisation duplicates
-The normalisation duplicates can be annotated with VEP and then these VEP annotations can be used to correct the annotations (Consequence, HGVSc, HGVSp) and be used to derive the Variant_Type and Variant_Classification fields in these rows within the Genie data prior to counting:
+We can use the VEP annotations for the normalisation duplicates generated earlier to correct the annotations (Consequence, HGVSc, HGVSp) for the relevant rows in the Genie data which can be used to derive the Variant_Type and Variant_Classification prior to counting:
 ```
 python modify_normalisation_dups.py \
   --input data_mutations_extended_clinical_info_GRCh38.txt \
@@ -173,7 +173,7 @@ This script generates counts of how many unique patients each variant is present
 - The number of patients with inframe deletions which cover the same CDS positions or are nested within the deletion.
     - These counts are only present for the `In_Frame_Del` variant type.
 
-This requires a file (`--columns_to_aggregate.txt`) where each Genie annotation to be kept in the final VCF are provided, one per line. A file of cancer types which are classified as haemonc-related cancer types are (`--haemonc_cancer_types.txt`) and a file of cancer types which are classified as solid cancer types can also be provided in order to generate grouped counts.
+This requires a file (`--columns_to_aggregate.txt`) where each Genie annotation to be kept in the final VCF are provided, one per line. A file of cancer types which are classified as haemonc-related cancer types are (`--haemonc_cancer_types.txt`) and a file of cancer types which are classified as solid cancer types (`--solid_cancer_types.txt`) can also be provided in order to generate grouped counts.
 
 Example command:
 ```
