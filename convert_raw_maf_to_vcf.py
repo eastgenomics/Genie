@@ -4,7 +4,7 @@ import pysam
 import re
 
 from tqdm import tqdm
-from utils import read_in_to_df, read_in_fasta
+from utils.file_io import read_in_to_df, read_in_fasta
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--output_vcf",
+        "--output",
         required=True,
         type=str,
         help="Name of output VCF file",
@@ -268,7 +268,7 @@ def main():
     unique_genie_data = get_unique_variant_rows(genie_data)
     fasta = read_in_fasta(args.fasta)
     genie_vcf_desc = convert_to_vcf_representation(unique_genie_data, fasta)
-    write_variants_to_vcf(genie_vcf_desc, args.output_vcf, fasta)
+    write_variants_to_vcf(genie_vcf_desc, args.output, fasta)
 
 
 if __name__ == "__main__":

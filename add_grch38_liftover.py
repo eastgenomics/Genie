@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import pysam
 
-from utils import read_in_to_df
+from utils.file_io import read_in_to_df
 
 
 def parse_args() -> argparse.Namespace:

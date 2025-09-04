@@ -207,4 +207,5 @@ cython_debug/
 *.fa.gz.gzi
 *.xlsx
 *.txt
+!requirements.txt
 .vscode/
