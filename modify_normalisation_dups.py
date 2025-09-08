@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import pysam
 
+from typing import Optional
+
 from utils.consequence_priorities import effect_priority, effect_map
 from utils.dtypes import column_dtypes
 from utils.file_io import read_in_to_df
@@ -69,25 +71,27 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
         DataFrame containing the relevant variants and INFO fields from the
         VCF file.
     """
-    vcf_in = pysam.VariantFile(vcf_file, "r")
+    with pysam.VariantFile(vcf_file, "r") as vcf_in:
+        # Parse VCF records and generate a dataframe
+        records = []
 
-    # Parse VCF records and generate a dataframe
-    records = []
-    for record in vcf_in:
-        row = {
-            "CHROM": str(record.chrom),
-            "POS": int(record.pos),
-            "REF": str(record.ref),
-            "ALT": ",".join(str(a) for a in record.alts),
-            "Genie_description": record.info.get("Genie_description", None),
-            "Transcript_ID": record.info.get("Transcript_ID", None),
-            "VEP_Consequence": record.info.get("CSQ_Consequence", None),
-            "VEP_Feature": record.info.get("CSQ_Feature", None),
-            "VEP_HGVSc": record.info.get("CSQ_HGVSc", None),
-            "VEP_HGVSp": record.info.get("CSQ_HGVSp", None),
-        }
+        for record in vcf_in:
+            row = {
+                "CHROM": str(record.chrom),
+                "POS": int(record.pos),
+                "REF": str(record.ref),
+                "ALT": ",".join(str(a) for a in record.alts),
+                "Genie_description": record.info.get(
+                    "Genie_description", None
+                ),
+                "Transcript_ID": record.info.get("Transcript_ID", None),
+                "VEP_Consequence": record.info.get("CSQ_Consequence", None),
+                "VEP_Feature": record.info.get("CSQ_Feature", None),
+                "VEP_HGVSc": record.info.get("CSQ_HGVSc", None),
+                "VEP_HGVSp": record.info.get("CSQ_HGVSp", None),
+            }
 
-        records.append(row)
+            records.append(row)
 
     vcf_df = pd.DataFrame(records)
 
@@ -367,7 +371,7 @@ def merge_vep_annotations_with_duplicates(
             " annotations for the first instance of the variant in the Genie"
             " data will be used:"
         )
-        print(merged.loc[mask].columns)
+        print(merged.loc[mask, "grch37_norm"].tolist())
 
     fallback_map = {
         "Consequence": "VEP_Consequence",
@@ -385,7 +389,7 @@ def merge_vep_annotations_with_duplicates(
 
 def get_most_severe_consequence(
     consequence: str, effect_priority_dict: dict
-) -> tuple:
+) -> str:
     """
     Process VEP consequence annotations.
 
@@ -431,7 +435,7 @@ def split_out_grch37_chrom_pos_ref_alt(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def classify_variant_type(ref: str, alt: str) -> str:
+def classify_variant_type(ref: str, alt: str) -> tuple[str, bool]:
     """
     Classify a variant as SNP, DEL, INS, DNP, TNP, or ONP using the length
     of the ref and alt alleles. For indels determine whether inframe
@@ -447,7 +451,6 @@ def classify_variant_type(ref: str, alt: str) -> str:
     Returns
     -------
     tuple
-        (variant_type, inframe)
         variant_type: str
         inframe: bool
     """
@@ -471,7 +474,10 @@ def classify_variant_type(ref: str, alt: str) -> str:
 
 
 def get_variant_classification(
-    effect: str, effect_map: dict, var_type: str = None, inframe: bool = False
+    effect: str,
+    effect_map: dict,
+    var_type: Optional[str] = None,
+    inframe: bool = False,
 ) -> str:
     """
     Map a single VEP effect, variant type, and inframe info

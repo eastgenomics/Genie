@@ -1,4 +1,4 @@
-# Prioritize Sequence Ontology terms in order of severity, as estimated by
+# Prioritise Sequence Ontology terms in order of severity, as estimated by
 # Ensembl:
 # https://ensembl.org/info/genome/variation/prediction/predicted_data.html
 # and https://github.com/mskcc/vcf2maf/blob/main/vcf2maf.pl#L32

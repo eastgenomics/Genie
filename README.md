@@ -36,7 +36,7 @@ python write_normalisation_duplicates_to_vcf.py \
 ```
 This VCF of duplicates should then be annotated with VEP to obtain the `Consequence,Feature,HGVSc,HGVSp` fields so that it can be used to correct the annotations (`Consequence, Feature, HGVSc, HGVSp, Variant_Type, Variant_Classification`) for the rows which contain these duplicates in the Genie data. This is required because these annotations are used for counting. Example VEP command:
 ```
-docker run -v /home/Genie:/data -w /data <vep-image-id>>  \
+docker run -v /home/Genie:/data -w /data <vep-image-id>  \
   vep -i /data/data_mutations_extended_normalised_duplicates.vcf \
   -o /data/data_mutations_extended_normalised_duplicates_annotated.vcf.gz  \
   --dir /data   \
@@ -47,10 +47,10 @@ docker run -v /home/Genie:/data -w /data <vep-image-id>>  \
   --buffer_size 500    \
   --no_stats --compress_output bgzip --shift_3prime 1
 ```
-A list of Ensembl transcripts can be obtained from the duplicates:
+A list of Ensembl transcripts can be obtained from the duplicates, one per line:
 ```
-bcftools query -f '%Transcript_ID' data_mutations_extended_normalised_duplicates.vcf \
-  | sort -u > transcripts.tsv
+bcftools query -f '%Transcript_ID\n' data_mutations_extended_normalised_duplicates.vcf \
+  | grep -v '^\.$' | sort -u > transcripts.tsv
 ```
 Then these transcripts can be used to filter the results:
 ```
