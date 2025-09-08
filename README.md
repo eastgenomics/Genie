@@ -3,11 +3,12 @@ This repository contains scripts to convert Genie MAF data to aggregated counts 
 
 ### Convert MAF to VCF
 Each unique variant in the MAF data is required to be converted to VCF description in GRCh37 to enable liftover to GRCh38. A FASTA (sourced from Ensembl) is required for the GRCh37 reference genome.
-These can be retrieved from the Ensembl FTP site:
+These can be retrieved from the Ensembl FTP site and then bgzipped and indexed:
 ```
 wget https://ftp.ensembl.org/pub/grch37/release-114/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 gzip -d Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 bgzip Homo_sapiens.GRCh37.dna.toplevel.fa
+samtools faidx Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 ```
 
 Example command:
@@ -54,10 +55,10 @@ bcftools query -f '%Transcript_ID\n' data_mutations_extended_normalised_duplicat
 ```
 Then these transcripts can be used to filter the results:
 ```
-docker run -v /home/dnanexus:/data -w /data <vep-image-id> \
+docker run -v /home/Genie:/data -w /data <vep-image-id> \
   filter_vep -i /data/data_mutations_extended_normalised_duplicates_annotated.vcf.gz \
   -o /data/data_mutations_extended_normalised_duplicates_annotated_filtered.vcf \
-  --only_matched --filter "Feature in transcripts.tsv"
+  --only_matched --filter "Feature in /data/transcripts.tsv" --force_overwrite
 ```
 Then the VEP CSQ string can be split to separate INFO fields:
 ```
@@ -148,7 +149,7 @@ Example command:
 ```
 python add_grch38_liftover.py \
   --genie_clinical data_mutations_extended_clinical_info.txt \
-  --vcf data_mutations_extended_GRCh38_normalised_nochr_or_alt.vcf.gz \
+  --vcf data_mutations_extended_GRCh38_normalised_nochr.vcf.gz \
   --output data_mutations_extended_clinical_info_GRCh38.txt
 ```
 

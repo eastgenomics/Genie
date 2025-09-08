@@ -277,7 +277,7 @@ def convert_duplicates_to_one_variant_per_row(
 
 def check_annotations_for_variants(
     df: pd.DataFrame, annotations_to_check: list
-):
+) -> dict:
     """
     Check if specified annotations are consistent for duplicates and return rows with differences.
 
