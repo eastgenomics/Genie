@@ -5,7 +5,6 @@
 effect_priority = {
     "transcript_ablation": 1,
     "exon_loss_variant": 1,
-    "sequence_feature + exon_loss_variant": 1,
     "feature_ablation": 1,
     "chromosome_number_variation": 1,
     "bidirectional_gene_fusion": 2,
