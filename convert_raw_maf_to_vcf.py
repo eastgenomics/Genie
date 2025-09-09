@@ -211,6 +211,9 @@ def write_variants_to_vcf(genie_vcf_description, output_vcf, fasta):
         "String",
         "Original variant description from Genie",
     )
+    header.info.add(
+        "Transcript_ID", "1", "String", "Ensembl Transcript ID from Genie"
+    )
 
     vcf_out = pysam.VariantFile(output_vcf, "w", header=header)
     # For each original variant, write new variant record
@@ -233,6 +236,16 @@ def write_variants_to_vcf(genie_vcf_description, output_vcf, fasta):
             f"{getattr(row, 'Chromosome')}_{getattr(row, 'Start_Position')}_{getattr(row, 'Reference_Allele')}_{getattr(row, 'Tumor_Seq_Allele2')}"
         )
         info_fields["Genie_description"] = orig_coord_str
+        transcript = getattr(row, "Transcript_ID", None)
+        info_fields["Transcript_ID"] = (
+            "."
+            if (
+                transcript is None
+                or pd.isna(transcript)
+                or str(transcript).strip() in {"", "."}
+            )
+            else str(transcript).strip()
+        )
 
         record = vcf_out.new_record(
             contig=str(getattr(row, "chrom_vcf")),
