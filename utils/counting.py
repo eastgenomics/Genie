@@ -281,6 +281,7 @@ def count_frameshift_truncating_and_nonsense(
     df: pl.DataFrame,
     cancer_count_type: str,
     patient_total: int,
+    truncating_variants: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """
     Count unique patients with frameshift or nonsense variants at the same
@@ -305,6 +306,23 @@ def count_frameshift_truncating_and_nonsense(
 
     col_name = f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
     df_counts = df_counts.rename({"downstream_patient_count": col_name})
+
+    # If this is a grouped (e.g. haemonc cancer) count, then all truncating
+    #  variants should have a count, so add 0 if not present in grouped count
+    if truncating_variants is not None:
+        result = (
+            truncating_variants.select(
+                "grch38_description", "Hugo_Symbol", "CDS_position"
+            )
+            .unique()
+            .join(
+                df_counts,
+                on=["Hugo_Symbol", "CDS_position"],
+                how="left",
+            )
+            .with_columns(pl.col(col_name).fill_null(0))
+        )
+        return result
 
     return df_counts
 
@@ -514,6 +532,7 @@ def count_nested_inframe_deletions(
     inframe_deletions_df: pl.DataFrame,
     cancer_count_type: str,
     patient_total: int,
+    inframe_deletions: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """
     Count the number of unique patients with inframe deletions that are either
@@ -554,6 +573,22 @@ def count_nested_inframe_deletions(
     inframe_counts = inframe_counts.rename(
         {"nested_patient_count": new_col_name}
     )
+    # If this is a grouped (e.g. haemonc cancer) count, then all in frame dels
+    #  should have a count, so add 0 if not present in grouped count
+    if inframe_deletions is not None:
+        result = (
+            inframe_deletions.select(
+                "Hugo_Symbol", "grch38_description", "del_start", "del_end"
+            )
+            .unique()
+            .join(
+                inframe_counts,
+                on=["Hugo_Symbol", "del_start", "del_end"],
+                how="left",
+            )
+            .with_columns(pl.col(new_col_name).fill_null(0))
+        )
+        return result
 
     return inframe_counts
 
@@ -583,7 +618,6 @@ def count_nested_inframe_deletions_per_cancer_type(
         .sort(["Hugo_Symbol", "CANCER_TYPE"])
     )
 
-    # Apply the function to each gene-cancer combination
     all_results = []
 
     for row in gene_cancer_combinations.iter_rows(named=True):
@@ -633,12 +667,12 @@ def count_nested_inframe_deletions_per_cancer_type(
             },
         )
 
-    # Step 2: Get unique combinations of genes and deletion positions
+    # Get unique combinations of genes and deletion positions
     full_index = inframe_deletions_df.select(
         ["Hugo_Symbol", "del_start", "del_end"]
     ).unique()
 
-    # Step 3: Create cross product with all cancer types
+    # Create cross product with all cancer types
     all_cancers = list(per_cancer_patient_total.keys())
     cancer_df = pl.DataFrame({"CANCER_TYPE": all_cancers})
 
@@ -653,7 +687,7 @@ def count_nested_inframe_deletions_per_cancer_type(
         .drop("key")
     )
 
-    # Step 4: Left join to fill missing combinations with zeros
+    # Left join to fill missing combinations with zeros
     nested_counts_filled = full_index.join(
         nested_per_cancer_counts,
         on=["Hugo_Symbol", "CANCER_TYPE", "del_start", "del_end"],
@@ -662,7 +696,7 @@ def count_nested_inframe_deletions_per_cancer_type(
         [pl.col("nested_patient_count").fill_null(0).cast(pl.Int64)]
     )
 
-    # Step 5: Pivot table - each row is gene/CDS position, each column is cancer type
+    # Pivot table - each row is gene/CDS position, each column is cancer type
     per_cancer_pivot = nested_counts_filled.pivot(
         index=["Hugo_Symbol", "del_start", "del_end"],
         on="CANCER_TYPE",
@@ -672,7 +706,7 @@ def count_nested_inframe_deletions_per_cancer_type(
         0
     )  # Fill any remaining nulls with 0
 
-    # Step 6: Rename columns to include patient totals
+    # Rename columns to include patient totals
     column_mapping = {}
     for col in per_cancer_pivot.columns:
         if col in per_cancer_patient_total:

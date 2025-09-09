@@ -28,8 +28,6 @@ from utils.merging import (
     merge_truncating_variants_counts,
     merge_inframe_deletions_with_counts,
     reorder_final_columns,
-    merge_truncating_variant_counts_grouped_cancer,
-    merge_inframe_deletions_grouped_cancer,
 )
 
 
@@ -174,14 +172,12 @@ def main():
     )
     truncating_variants = extract_position_from_hgvsc(truncating_variants)
 
-    print(datetime.now(), "Truncating counts all cancers")
     truncating_counts_all_cancers = count_frameshift_truncating_and_nonsense(
         df=truncating_variants,
         patient_total=patient_total,
         cancer_count_type="All_Cancers",
     )
 
-    print(datetime.now(), "Truncating counts per cancer")
     truncating_counts_per_cancer = (
         count_frameshift_truncating_and_nonsense_per_cancer_type(
             df=truncating_variants,
@@ -189,14 +185,16 @@ def main():
         )
     )
 
-    print(datetime.now(), "Merging frameshift counts together")
     trunc_counts = merge_truncating_variants_counts(
         truncating_variants=truncating_variants,
         truncating_counts_all_cancers=truncating_counts_all_cancers,
         truncating_counts_per_cancer=truncating_counts_per_cancer,
     )
 
-    print(datetime.now(), "Generating inframe deletion counts")
+    print(
+        f"{datetime.now().replace(microsecond=0)} Generating inframe"
+        " deletion counts"
+    )
     inframe_deletions = get_inframe_deletions(genie_data).select(
         "grch38_description",
         "Hugo_Symbol",
@@ -204,51 +202,45 @@ def main():
         "PATIENT_ID",
         "CANCER_TYPE",
     )
-    inframe_deletions_with_positions = add_deletion_positions(
-        inframe_deletions
-    )
+    inframe_deletions = add_deletion_positions(inframe_deletions)
     inframe_deletions_count_all_cancers = count_nested_inframe_deletions(
-        inframe_deletions_df=inframe_deletions_with_positions,
+        inframe_deletions_df=inframe_deletions,
         cancer_count_type="All_Cancers",
         patient_total=patient_total,
     )
 
     inframe_deletions_count_per_cancer = (
         count_nested_inframe_deletions_per_cancer_type(
-            inframe_deletions_df=inframe_deletions_with_positions,
+            inframe_deletions_df=inframe_deletions,
             per_cancer_patient_total=per_cancer_patient_total,
         )
     )
 
     inframe_deletions_with_counts = merge_inframe_deletions_with_counts(
-        inframe_deletions_with_positions=inframe_deletions_with_positions,
+        inframe_deletions_with_positions=inframe_deletions,
         inframe_deletions_count_all_cancers=inframe_deletions_count_all_cancers,
         inframe_deletions_count_per_cancer=inframe_deletions_count_per_cancer,
     )
 
-    print(datetime.now(), "Merging all counts together")
-    print(datetime.now(), "Merging nucleotide counts")
+    # Merge all the counts together
     one_row_per_variant_agg = one_row_per_variant_agg.join(
         merged_nt_counts,
         on="grch38_description",
         how="left",
     )
 
-    print(datetime.now(), "Merging amino acid counts")
     one_row_per_variant_agg = one_row_per_variant_agg.join(
         merged_aa_counts,
         on=["Hugo_Symbol", "HGVSp"],
         how="left",
     )
 
-    print(datetime.now(), "Merging truncating variant counts")
     one_row_per_variant_agg = one_row_per_variant_agg.join(
         trunc_counts,
         on="grch38_description",
         how="left",
     )
 
-    print(datetime.now(), "Merging inframe deletion counts")
     one_row_per_variant_agg = one_row_per_variant_agg.join(
         inframe_deletions_with_counts,
         on="grch38_description",
@@ -256,12 +248,15 @@ def main():
     )
 
     if args.haemonc_cancer_types:
+        print(
+            f"{datetime.now().replace(microsecond=0)} Generating grouped"
+            " haemonc cancer counts"
+        )
         haemonc_rows = get_rows_for_cancer_types(
             df=genie_data,
             cancer_types=haemonc_cancers,
         )
 
-        print(datetime.now(), "Generating nucleotide haemonc cancer counts")
         nucleotide_counts_haemonc_cancers = count_same_nucleotide_change(
             df=haemonc_rows,
             unique_patient_total=haemonc_cancer_patient_total,
@@ -269,7 +264,6 @@ def main():
             all_variants_df=genie_data,
         )
 
-        print(datetime.now(), "Generating amino acid haemonc counts")
         amino_acid_counts_haemonc_cancers = count_amino_acid_change(
             df=haemonc_rows,
             unique_patient_total=haemonc_cancer_patient_total,
@@ -277,7 +271,6 @@ def main():
             all_variants_df=genie_data,
         )
 
-        print(datetime.now(), "Haemonc truncating counts")
         truncating_variants_haemonc = get_truncating_variants(df=haemonc_rows)
         truncating_variants_haemonc = extract_position_from_hgvsc(
             df=truncating_variants_haemonc
@@ -286,9 +279,9 @@ def main():
             df=truncating_variants_haemonc,
             patient_total=haemonc_cancer_patient_total,
             cancer_count_type="Haemonc_Cancers",
+            truncating_variants=truncating_variants,
         )
 
-        print(datetime.now(), "Haemonc inframe counts")
         inframe_deletions_haemonc = get_inframe_deletions(
             df=haemonc_rows
         ).select(
@@ -305,28 +298,26 @@ def main():
                 inframe_deletions_df=inframe_deletions_haemonc,
                 cancer_count_type="Haemonc_Cancers",
                 patient_total=haemonc_cancer_patient_total,
+                inframe_deletions=inframe_deletions,
             )
         )
 
-        print(datetime.now(), "Merging aa counts with nt haemonc")
         all_ho_counts = nucleotide_counts_haemonc_cancers.join(
             amino_acid_counts_haemonc_cancers,
             on="grch38_description",
             how="left",
         )
 
-        print(datetime.now(), "Merging truncating counts haemonc")
-        all_ho_counts = merge_truncating_variant_counts_grouped_cancer(
-            merged_aa_grouped_cancer_counts=all_ho_counts,
-            truncating_plus_position=truncating_variants_haemonc,
-            frameshift_counts_grouped_cancer=frameshift_counts_haemonc,
+        all_ho_counts = all_ho_counts.join(
+            frameshift_counts_haemonc,
+            on=["Hugo_Symbol", "grch38_description"],
+            how="left",
         )
 
-        print(datetime.now(), "Merging inframe deletion haemonc counts")
-        all_ho_counts = merge_inframe_deletions_grouped_cancer(
-            inframe_deletions=inframe_deletions_haemonc,
-            inframe_deletions_count_grouped_cancers=inframe_deletions_count_haemonc_cancers,
-            merged_frameshift_grouped_cancers=all_ho_counts,
+        all_ho_counts = all_ho_counts.join(
+            inframe_deletions_count_haemonc_cancers,
+            on=["Hugo_Symbol", "grch38_description"],
+            how="left",
         )
 
         all_ho_counts = all_ho_counts.drop(
@@ -337,18 +328,20 @@ def main():
             "CDS_position",
         )
 
-        print(datetime.now(), "Merge all haemonc counts")
         one_row_per_variant_agg = one_row_per_variant_agg.join(
             all_ho_counts, on="grch38_description", how="left"
         )
 
     if args.solid_cancer_types:
+        print(
+            f"{datetime.now().replace(microsecond=0)} Generating grouped"
+            " solid cancer counts"
+        )
         solid_rows = get_rows_for_cancer_types(
             df=genie_data,
             cancer_types=solid_cancers,
         )
 
-        print(datetime.now(), "Generating nucleotide solid cancer counts")
         nucleotide_counts_solid_cancers = count_same_nucleotide_change(
             df=solid_rows,
             unique_patient_total=solid_cancer_patient_total,
@@ -356,7 +349,6 @@ def main():
             all_variants_df=genie_data,
         )
 
-        print(datetime.now(), "Generating amino acid solid counts")
         amino_acid_counts_solid_cancers = count_amino_acid_change(
             df=solid_rows,
             unique_patient_total=solid_cancer_patient_total,
@@ -364,18 +356,17 @@ def main():
             all_variants_df=genie_data,
         )
 
-        print(datetime.now(), "Solid truncating counts")
         truncating_variants_solid = get_truncating_variants(df=solid_rows)
-        truncating_variants_solid = extract_position_from_cds(
+        truncating_variants_solid = extract_position_from_hgvsc(
             df=truncating_variants_solid
         )
         frameshift_counts_solid = count_frameshift_truncating_and_nonsense(
             df=truncating_variants_solid,
             patient_total=solid_cancer_patient_total,
             cancer_count_type="Solid_Cancers",
+            truncating_variants=truncating_variants,
         )
 
-        print("Solid inframe counts")
         inframe_deletions_solid = get_inframe_deletions(df=solid_rows).select(
             "Hugo_Symbol",
             "grch38_description",
@@ -389,27 +380,25 @@ def main():
             inframe_deletions_df=inframe_deletions_solid,
             cancer_count_type="Solid_Cancers",
             patient_total=solid_cancer_patient_total,
+            inframe_deletions=inframe_deletions,
         )
 
-        print(datetime.now(), "Merging aa counts with nt solid")
         all_solid_counts = nucleotide_counts_solid_cancers.join(
             amino_acid_counts_solid_cancers,
             on="grch38_description",
             how="left",
         )
 
-        print(datetime.now(), "Merging truncating counts solid")
-        all_solid_counts = merge_truncating_variant_counts_grouped_cancer(
-            merged_aa_grouped_cancer_counts=all_solid_counts,
-            truncating_plus_position=truncating_variants_solid,
-            frameshift_counts_grouped_cancer=frameshift_counts_solid,
+        all_solid_counts = all_solid_counts.join(
+            frameshift_counts_solid,
+            on=["Hugo_Symbol", "grch38_description"],
+            how="left",
         )
 
-        print(datetime.now(), "Merging inframe deletion solid counts")
-        all_solid_counts = merge_inframe_deletions_grouped_cancer(
-            inframe_deletions=inframe_deletions_solid,
-            inframe_deletions_count_grouped_cancers=inframe_deletions_count_solid_cancers,
-            merged_frameshift_grouped_cancers=all_solid_counts,
+        all_solid_counts = all_solid_counts.join(
+            inframe_deletions_count_solid_cancers,
+            on=["Hugo_Symbol", "grch38_description"],
+            how="left",
         )
 
         all_solid_counts = all_solid_counts.drop(
@@ -420,11 +409,14 @@ def main():
             "CDS_position",
         )
 
-        print(datetime.now(), "Merge all solid counts")
         one_row_per_variant_agg = one_row_per_variant_agg.join(
             all_solid_counts, on="grch38_description", how="left"
         )
 
+    print(
+        f"{datetime.now().replace(microsecond=0)} Reformatting and writing"
+        " output"
+    )
     final_df = reorder_final_columns(
         one_row_per_variant_agg,
         patient_total,
