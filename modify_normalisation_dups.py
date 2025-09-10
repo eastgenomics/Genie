@@ -71,26 +71,24 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
         DataFrame containing the relevant variants and INFO fields from the
         VCF file.
     """
-    with pysam.VariantFile(vcf_file, "r") as vcf_in:
-        # Parse VCF records and generate a dataframe
-        records = []
-        for record in vcf_in:
-            row = {
-                "CHROM": str(record.chrom),
-                "POS": int(record.pos),
-                "REF": str(record.ref),
-                "ALT": ",".join(str(a) for a in record.alts),
-                "Genie_description": record.info.get(
-                    "Genie_description", None
-                ),
-                "Transcript_ID": record.info.get("Transcript_ID", None),
-                "VEP_Consequence": record.info.get("CSQ_Consequence", None),
-                "VEP_Feature": record.info.get("CSQ_Feature", None),
-                "VEP_HGVSc": record.info.get("CSQ_HGVSc", None),
-                "VEP_HGVSp": record.info.get("CSQ_HGVSp", None),
-            }
+    vcf_in = pysam.VariantFile(vcf_file, "r")
+    # Parse VCF records and generate a dataframe
+    records = []
+    for record in vcf_in:
+        row = {
+            "CHROM": str(record.chrom),
+            "POS": int(record.pos),
+            "REF": str(record.ref),
+            "ALT": ",".join(str(a) for a in record.alts),
+            "Genie_description": record.info.get("Genie_description", None),
+            "Transcript_ID": record.info.get("Transcript_ID", None),
+            "VEP_Consequence": record.info.get("CSQ_Consequence", None),
+            "VEP_Feature": record.info.get("CSQ_Feature", None),
+            "VEP_HGVSc": record.info.get("CSQ_HGVSc", None),
+            "VEP_HGVSp": record.info.get("CSQ_HGVSp", None),
+        }
 
-            records.append(row)
+        records.append(row)
 
     vcf_df = pd.DataFrame(records)
 
