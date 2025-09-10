@@ -6,7 +6,7 @@ def calculate_unique_patient_counts(
 ):
     """
     Calculate the number of unique patients overall, per cancer type and
-    optionally for haemonc cancer types.
+    optionally for grouped (haemonc or solid) cancer types.
 
     Parameters
     ----------
