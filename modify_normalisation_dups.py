@@ -448,7 +448,6 @@ def classify_variant_type(ref: str, alt: str) -> tuple[str, bool]:
     Returns
     -------
     tuple
-        (variant_type, inframe)
         variant_type: str
         inframe: bool
     """
