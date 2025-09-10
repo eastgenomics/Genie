@@ -273,7 +273,7 @@ def convert_duplicates_to_one_variant_per_row(
 
 def check_annotations_for_variants(
     df: pd.DataFrame, annotations_to_check: list
-):
+) -> dict:
     """
     Check if specified annotations are consistent for duplicates and return rows with differences.
 
@@ -367,7 +367,7 @@ def merge_vep_annotations_with_duplicates(
             " annotations for the first instance of the variant in the Genie"
             " data will be used:"
         )
-        print(merged.loc[mask].columns)
+        print(merged.loc[mask, "grch37_norm"].tolist())
 
     fallback_map = {
         "Consequence": "VEP_Consequence",
