@@ -1,20 +1,19 @@
 ## Generate counts from GENIE Cohort data
-This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to [UK Somatic Variant Interpretation Guidelines (S-VIG)](https://www.acgs.uk.com/media/12831/svig-uk_guidelines_v10_-_post-acgs_ratification_final_submit01.pdf) and its [supplementary information](https://www.acgs.uk.com/media/12832/svig-uk-supplementary-material-post-acgs-ratification-final.pdf).
+This repository contains scripts to convert Genie MAF data to aggregated counts to assist with interpretation according to [UK Somatic Variant Intepretation Guidelines (S-VIG)](https://www.acgs.uk.com/media/12831/svig-uk_guidelines_v10_-_post-acgs_ratification_final_submit01.pdf) and its [supplementary information](https://www.acgs.uk.com/media/12832/svig-uk-supplementary-material-post-acgs-ratification-final.pdf).
 
 ### Convert MAF to VCF
 Each unique variant in the MAF data is required to be converted to VCF description in GRCh37 to enable liftover to GRCh38. A FASTA (sourced from Ensembl) is required for the GRCh37 reference genome.
-These can be retrieved from the Ensembl FTP site and then bgzipped and indexed:
+These can be retrieved from the Ensembl FTP site:
 ```
 wget https://ftp.ensembl.org/pub/grch37/release-114/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 gzip -d Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 bgzip Homo_sapiens.GRCh37.dna.toplevel.fa
-samtools faidx Homo_sapiens.GRCh37.dna.toplevel.fa.gz
 ```
 
 Example command:
 ```
 python convert_raw_maf_to_vcf.py \
-  --input data_mutations_extended_cleaned.txt \
+  --input data_mutations_extended.txt \
   --fasta Homo_sapiens.GRCh37.dna.toplevel.fa.gz \
   --output data_mutations_extended.vcf
 ```
@@ -37,7 +36,7 @@ python write_normalisation_duplicates_to_vcf.py \
 ```
 This VCF of duplicates should then be annotated with VEP to obtain the `Consequence,Feature,HGVSc,HGVSp` fields so that it can be used to correct the annotations (`Consequence, Feature, HGVSc, HGVSp, Variant_Type, Variant_Classification`) for the rows which contain these duplicates in the Genie data. This is required because these annotations are used for counting. Example VEP command:
 ```
-docker run -v /home/Genie:/data -w /data <vep-image-id>  \
+docker run -v /home/Genie:/data -w /data <vep-image-id>>  \
   vep -i /data/data_mutations_extended_normalised_duplicates.vcf \
   -o /data/data_mutations_extended_normalised_duplicates_annotated.vcf.gz  \
   --dir /data   \
@@ -48,17 +47,17 @@ docker run -v /home/Genie:/data -w /data <vep-image-id>  \
   --buffer_size 500    \
   --no_stats --compress_output bgzip --shift_3prime 1
 ```
-A list of Ensembl transcripts can be obtained from the duplicates, one per line:
+A list of Ensembl transcripts can be obtained from the duplicates:
 ```
-bcftools query -f '%Transcript_ID\n' data_mutations_extended_normalised_duplicates.vcf \
-  | grep -v '^\.$' | sort -u > transcripts.tsv
+bcftools query -f '%Transcript_ID' data_mutations_extended_normalised_duplicates.vcf \
+  | sort -u > transcripts.tsv
 ```
 Then these transcripts can be used to filter the results:
 ```
-docker run -v /home/Genie:/data -w /data <vep-image-id> \
+docker run -v /home/dnanexus:/data -w /data <vep-image-id> \
   filter_vep -i /data/data_mutations_extended_normalised_duplicates_annotated.vcf.gz \
   -o /data/data_mutations_extended_normalised_duplicates_annotated_filtered.vcf \
-  --only_matched --filter "Feature in /data/transcripts.tsv" --force_overwrite
+  --only_matched --filter "Feature in transcripts.tsv"
 ```
 Then the VEP CSQ string can be split to separate INFO fields:
 ```
@@ -149,7 +148,7 @@ Example command:
 ```
 python add_grch38_liftover.py \
   --genie_clinical data_mutations_extended_clinical_info.txt \
-  --vcf data_mutations_extended_GRCh38_normalised_nochr.vcf.gz \
+  --vcf data_mutations_extended_GRCh38_normalised_nochr_or_alt.vcf.gz \
   --output data_mutations_extended_clinical_info_GRCh38.txt
 ```
 
