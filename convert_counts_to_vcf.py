@@ -69,7 +69,13 @@ def remove_disallowed_chars_from_columns(genie_data):
         col = re.sub(r"[\/\s,-]", "", col)
         new_columns.append(col)
 
-    genie_data = genie_data.rename(dict(zip(genie_data.columns, new_columns)))
+    mapping = dict(zip(genie_data.columns, new_columns))
+    if len(set(mapping.values())) != len(mapping.values()):
+        raise ValueError(
+            "Column renaming would lead to duplicate column names, please"
+            " check the input file column names."
+        )
+    genie_data = genie_data.rename(mapping)
 
     # Replace commas with '&' in "Consequence" column if it exists
     if "Consequence" in genie_data.columns:
@@ -259,10 +265,22 @@ def write_variants_to_vcf(
         )
         .with_columns(
             [
-                pl.col("split_desc").list.get(0).alias("chrom"),
-                pl.col("split_desc").list.get(1).cast(pl.Int64).alias("pos"),
-                pl.col("split_desc").list.get(2).alias("ref"),
-                pl.col("split_desc").list.get(3).alias("alt"),
+                pl.when(pl.col("split_desc").list.len() == 4)
+                .then(pl.col("split_desc").list.get(0))
+                .otherwise(None)
+                .alias("chrom"),
+                pl.when(pl.col("split_desc").list.len() == 4)
+                .then(pl.col("split_desc").list.get(1).cast(pl.Int64))
+                .otherwise(None)
+                .alias("pos"),
+                pl.when(pl.col("split_desc").list.len() == 4)
+                .then(pl.col("split_desc").list.get(2))
+                .otherwise(None)
+                .alias("ref"),
+                pl.when(pl.col("split_desc").list.len() == 4)
+                .then(pl.col("split_desc").list.get(3))
+                .otherwise(None)
+                .alias("alt"),
             ]
         )
         .drop("split_desc")

@@ -93,6 +93,15 @@ def main():
     if args.solid_cancer_types:
         solid_cancers = read_txt_file_to_list(args.solid_cancer_types)
 
+    # Validate no overlap between cancer type groups
+    if haemonc_cancers and solid_cancers:
+        overlap = set(haemonc_cancers) & set(solid_cancers)
+        if overlap:
+            raise ValueError(
+                "The haemonc and solid cancer type lists have the following"
+                f" overlap: {', '.join(overlap)}. Please ensure there is no"
+                " overlap between the two lists."
+            )
     (
         patient_total,
         per_cancer_patient_total,

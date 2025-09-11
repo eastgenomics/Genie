@@ -70,7 +70,7 @@ class TestCountSameNucleotideChangeAllCancers:
         )
 
 
-class CountSameNucleotideChangePerCancerType:
+class TestCountSameNucleotideChangePerCancerType:
     def test_count_same_nucleotide_change_per_cancer_type(self):
         df = pl.from_dict(
             {
@@ -103,7 +103,6 @@ class CountSameNucleotideChangePerCancerType:
             "Lymphatic Cancer": 2,
             "Blood Cancer": 1,
             "Mastocytosis": 1,
-            "Another cancer": 12,
         }
 
         result = utils.counting.count_same_nucleotide_change_per_cancer_type(
@@ -118,10 +117,9 @@ class CountSameNucleotideChangePerCancerType:
                     0,
                     0,
                 ],
-                "SameNucleotideChange.Lymphatic Cancer_Count_N_2": [1, 0, 0],
-                "SameNucleotideChange.Blood Cancer_Count_N_1": [1, 0, 0],
-                "SameNucleotideChange.Mastocytosis_Count_N_1": [1, 0, 0],
-                "SameNucleotideChange.Another cancer_Count_N_12": [0, 0, 0],
+                "SameNucleotideChange.Lymphatic Cancer_Count_N_2": [0, 1, 0],
+                "SameNucleotideChange.Blood Cancer_Count_N_1": [0, 1, 0],
+                "SameNucleotideChange.Mastocytosis_Count_N_1": [0, 0, 1],
             }
         )
 
@@ -737,22 +735,22 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                 "CDS_position": [480, 481, 483, 484, 485, 511],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 1_Count_N_500": [
                     2,
-                    0,
-                    0,
+                    1,
+                    1,
                     1,
                     0,
                     0,
                 ],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 2_Count_N_4": [
-                    0,
                     2,
-                    0,
-                    0,
-                    0,
+                    2,
+                    1,
+                    1,
+                    1,
                     1,
                 ],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 3_Count_N_3": [
-                    0,
+                    1,
                     1,
                     0,
                     0,
@@ -760,10 +758,10 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                 ],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 4_Count_N_50": [
-                    0,
-                    0,
                     2,
-                    0,
+                    2,
+                    2,
+                    1,
                     1,
                     0,
                 ],

@@ -73,7 +73,7 @@ def count_same_nucleotide_change_per_cancer_type(
     """
     # Group by variant and cancer type and count unique patients
     per_cancer_counts = df.group_by(["grch38_description", "CANCER_TYPE"]).agg(
-        pl.col("PATIENT_ID").n_unique().alias("patient_count")
+        pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias("patient_count")
     )
 
     # Pivot so all cancer types are columns
@@ -335,40 +335,33 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
     Count how many patients have a frameshift (truncating) or nonsense variant
     at the same position or downstream in the same gene per cancer type.
     """
-    gene_cancer_combinations = (
-        df.select(["Hugo_Symbol", "CANCER_TYPE"])
-        .unique()
-        .sort(["Hugo_Symbol", "CANCER_TYPE"])
-    )
 
     all_results = []
 
-    # Iterate over each gene-cancer combination
-    for row in gene_cancer_combinations.iter_rows(named=True):
-        gene = row["Hugo_Symbol"]
-        cancer = row["CANCER_TYPE"]
+    # Iterate over unique genes
+    for gene in df["Hugo_Symbol"].unique().to_list():
+        gene_df = df.filter(pl.col("Hugo_Symbol") == gene)
+        gene_positions = sorted(gene_df["CDS_position"].unique().to_list())
 
-        subset = df.filter(
-            (pl.col("Hugo_Symbol") == gene) & (pl.col("CANCER_TYPE") == cancer)
-        )
+        # Iterate over unique cancer types
+        for cancer in per_cancer_patient_total.keys():
+            subset = gene_df.filter(pl.col("CANCER_TYPE") == cancer)
 
-        # Count downstream patients for each CDS position
-        positions = sorted(subset["CDS_position"].to_list())
-        patient_ids = subset["PATIENT_ID"].to_list()
-        rows = []
-        for pos in positions:
-            downstream_patients = {
-                pid
-                for j, pid in enumerate(patient_ids)
-                if subset["CDS_position"][j] >= pos
-            }
-            rows.append(
-                {
-                    "CDS_position": pos,
-                    "downstream_patient_count": len(downstream_patients),
+            # Map CDS_position to downstream patient counts
+            rows = []
+            for pos in gene_positions:
+                downstream_patients = {
+                    pid
+                    for j, pid in enumerate(subset["PATIENT_ID"])
+                    if subset["CDS_position"][j] >= pos
                 }
-            )
-        if rows:
+                rows.append(
+                    {
+                        "CDS_position": pos,
+                        "downstream_patient_count": len(downstream_patients),
+                    }
+                )
+
             result_df = pl.DataFrame(rows).with_columns(
                 [
                     pl.lit(gene).alias("Hugo_Symbol"),
@@ -378,10 +371,10 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
             all_results.append(result_df)
 
     # Combine all results
-    if all_results:
-        combined = pl.concat(all_results, how="vertical")
-    else:
-        combined = pl.DataFrame(
+    combined = (
+        pl.concat(all_results, how="vertical")
+        if all_results
+        else pl.DataFrame(
             {
                 "Hugo_Symbol": [],
                 "CANCER_TYPE": [],
@@ -389,37 +382,15 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
                 "downstream_patient_count": [],
             }
         )
-
-    # Build full cross join for missing combinations
-    full_index = df.select(["Hugo_Symbol", "CDS_position"]).unique()
-    all_cancers = pl.DataFrame(
-        {"CANCER_TYPE": list(per_cancer_patient_total.keys())}
-    )
-    full_index = full_index.with_columns(pl.lit(1).alias("key"))
-    all_cancers = all_cancers.with_columns(pl.lit(1).alias("key"))
-    full_index = full_index.join(all_cancers, on="key", how="inner").drop(
-        "key"
-    )
-
-    # Left join counts onto full index and fill missing with 0
-    filled = full_index.join(
-        combined, on=["Hugo_Symbol", "CANCER_TYPE", "CDS_position"], how="left"
-    )
-    filled = filled.with_columns(
-        pl.col("downstream_patient_count").fill_null(0).cast(pl.Int32)
     )
 
     # Pivot so each cancer type becomes a column
-    pivoted = filled.pivot(
+    pivoted = combined.pivot(
         values="downstream_patient_count",
         index=["Hugo_Symbol", "CDS_position"],
         on="CANCER_TYPE",
         aggregate_function="first",
     ).fill_null(0)
-
-    for col in pivoted.columns:
-        if col not in ["Hugo_Symbol", "CDS_position"]:
-            pivoted = pivoted.with_columns(pl.col(col).cast(pl.Int64))
 
     # Rename columns to include patient totals
     new_column_names = {}
