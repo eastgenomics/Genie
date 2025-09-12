@@ -618,108 +618,84 @@ def count_nested_inframe_deletions_per_cancer_type(
     pl.DataFrame
         DataFrame with counts of matching or nested inframe deletions per cancer type.
     """
-    gene_cancer_combinations = (
-        inframe_deletions_df.select(["Hugo_Symbol", "CANCER_TYPE"])
+    unique_ranges = (
+        inframe_deletions_df.select(["Hugo_Symbol", "del_start", "del_end"])
         .unique()
-        .sort(["Hugo_Symbol", "CANCER_TYPE"])
+        .sort(["Hugo_Symbol", "del_start", "del_end"])
     )
 
     all_results = []
 
-    for row in gene_cancer_combinations.iter_rows(named=True):
-        hugo_symbol = row["Hugo_Symbol"]
-        cancer_type = row["CANCER_TYPE"]
+    # For each unique deletion, count nested patients per cancer type
+    for row in unique_ranges.iter_rows(named=True):
+        hugo = row["Hugo_Symbol"]
+        start = row["del_start"]
+        end = row["del_end"]
 
-        # Filter data for this specific gene-cancer combination
-        gene_cancer_subset = inframe_deletions_df.filter(
-            (pl.col("Hugo_Symbol") == hugo_symbol)
-            & (pl.col("CANCER_TYPE") == cancer_type)
+        # Get all deletions for this gene
+        gene_subset = inframe_deletions_df.filter(
+            pl.col("Hugo_Symbol") == hugo
         )
 
-        # Apply the nested deletions counting function
-        nested_counts = count_patients_with_nested_deletions(
-            gene_cancer_subset
+        # Find nested deletions across all patients/cancer types
+        nested_subset = gene_subset.filter(
+            (pl.col("del_start") >= start) & (pl.col("del_end") <= end)
         )
 
-        # Add back the grouping columns
-        nested_counts = nested_counts.with_columns(
+        # Count unique patients per cancer type
+        nested_counts_per_cancer = nested_subset.group_by("CANCER_TYPE").agg(
+            pl.col("PATIENT_ID").n_unique().alias("nested_patient_count")
+        )
+
+        # Include 0 for cancer types with no nested patients
+        all_cancers_df = pl.DataFrame(
+            {"CANCER_TYPE": list(per_cancer_patient_total.keys())}
+        )
+        nested_counts_per_cancer = all_cancers_df.join(
+            nested_counts_per_cancer, on="CANCER_TYPE", how="left"
+        ).with_columns(
+            pl.col("nested_patient_count").fill_null(0).cast(pl.Int64)
+        )
+
+        # Add deletion info
+        nested_counts_per_cancer = nested_counts_per_cancer.with_columns(
             [
-                pl.lit(hugo_symbol).alias("Hugo_Symbol"),
-                pl.lit(cancer_type).alias("CANCER_TYPE"),
+                pl.lit(hugo).alias("Hugo_Symbol"),
+                pl.lit(start).alias("del_start"),
+                pl.lit(end).alias("del_end"),
             ]
         )
 
-        all_results.append(nested_counts)
+        all_results.append(nested_counts_per_cancer)
 
     # Combine all results
-    if all_results:
-        nested_per_cancer_counts = pl.concat(all_results, how="vertical")
-    else:
-        # Handle empty case
-        nested_per_cancer_counts = pl.DataFrame(
-            {
-                "Hugo_Symbol": [],
-                "CANCER_TYPE": [],
-                "del_start": [],
-                "del_end": [],
-                "nested_patient_count": [],
-            },
-            schema={
-                "Hugo_Symbol": pl.Utf8,
-                "CANCER_TYPE": pl.Utf8,
-                "del_start": pl.Int64,
-                "del_end": pl.Int64,
-                "nested_patient_count": pl.Int64,
-            },
-        )
+    nested_counts_df = pl.concat(all_results, how="vertical")
 
-    # Get unique combinations of genes and deletion positions
-    full_index = inframe_deletions_df.select(
-        ["Hugo_Symbol", "del_start", "del_end"]
-    ).unique()
-
-    # Create cross product with all cancer types
-    all_cancers = list(per_cancer_patient_total.keys())
-    cancer_df = pl.DataFrame({"CANCER_TYPE": all_cancers})
-
-    # Cross join using a temporary key column
-    full_index = (
-        full_index.with_columns(pl.lit(1).alias("key"))
-        .join(
-            cancer_df.with_columns(pl.lit(1).alias("key")),
-            on="key",
-            how="inner",
-        )
-        .drop("key")
-    )
-
-    # Left join to fill missing combinations with zeros
-    nested_counts_filled = full_index.join(
-        nested_per_cancer_counts,
-        on=["Hugo_Symbol", "CANCER_TYPE", "del_start", "del_end"],
-        how="left",
-    ).with_columns(
-        [pl.col("nested_patient_count").fill_null(0).cast(pl.Int64)]
-    )
-
-    # Pivot table - each row is gene/CDS position, each column is cancer type
-    per_cancer_pivot = nested_counts_filled.pivot(
+    # Pivot table: each row = gene/CDS position, each column = cancer type
+    pivot_df = nested_counts_df.pivot(
         index=["Hugo_Symbol", "del_start", "del_end"],
         on="CANCER_TYPE",
         values="nested_patient_count",
-        aggregate_function="first",  # Should be unique combinations
-    ).fill_null(
-        0
-    )  # Fill any remaining nulls with 0
+        aggregate_function="first",
+    ).fill_null(0)
 
     # Rename columns to include patient totals
-    column_mapping = {}
-    for col in per_cancer_pivot.columns:
-        if col in per_cancer_patient_total:
-            new_name = f"NestedInframeDeletionsPerCDS.{col}_Count_N_{per_cancer_patient_total[col]}"
-            column_mapping[col] = new_name
+    column_mapping = {
+        col: (
+            f"NestedInframeDeletionsPerCDS.{col}_Count_N_{per_cancer_patient_total[col]}"
+        )
+        for col in per_cancer_patient_total.keys()
+        if col in pivot_df.columns
+    }
 
-    if column_mapping:
-        per_cancer_pivot = per_cancer_pivot.rename(column_mapping)
+    pivot_df = pivot_df.rename(column_mapping)
+    pivot_df = pivot_df.with_columns(
+        [
+            pl.col(col).cast(pl.Int64)
+            for col in pivot_df.columns
+            if col
+            not in ["Hugo_Symbol"]  # cast del_start, del_end, and counts
+        ]
+    )
 
-    return per_cancer_pivot
+    return pivot_df

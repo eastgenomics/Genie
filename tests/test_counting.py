@@ -1002,24 +1002,24 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     0,
                 ],
                 "NestedInframeDeletionsPerCDS.Cancer 2_Count_N_4": [
-                    0,
+                    1,
                     1,
                     0,
                     0,
                     0,
                 ],
                 "NestedInframeDeletionsPerCDS.Cancer 3_Count_N_3": [
-                    0,
+                    1,
                     0,
                     1,
                     0,
                     0,
                 ],
                 "NestedInframeDeletionsPerCDS.Cancer 4_Count_N_50": [
+                    1,
                     0,
                     0,
-                    0,
-                    0,
+                    1,
                     1,
                 ],
                 "NestedInframeDeletionsPerCDS.Cancer 5_Count_N_120": [
