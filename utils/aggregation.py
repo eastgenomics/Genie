@@ -1,20 +1,21 @@
-import pandas as pd
+import polars as pl
 
 
 def calculate_unique_patient_counts(
-    df: pd.DataFrame, haemonc_cancers: list = None
+    df: pl.DataFrame, haemonc_cancers: list = None, solid_cancers: list = None
 ):
     """
     Calculate the number of unique patients overall, per cancer type and
-    (optionally) for haemonc cancer types.
+    optionally for grouped (haemonc or solid) cancer types.
 
     Parameters
     ----------
-    df : pd.DataFrame
+    df : pl.DataFrame
         Input dataframe with columns PATIENT_ID, CANCER_TYPE
     haemonc_cancers : list, optional
-        List of haemonc cancer types to filter by. If provided, will calculate
-        unique patient counts for these cancer types only.
+        List of haemonc cancer types to filter by
+    solid_cancers : list, optional
+        List of solid cancer types to filter by
 
     Returns
     -------
@@ -25,95 +26,144 @@ def calculate_unique_patient_counts(
         as values
     haemonc_patient_n : int or None
         Total number of unique patients in haemonc cancer types, if applicable
+    solid_patient_n : int or None
+        Total number of unique patients in solid cancer types, if applicable
     """
-    total_patient_n = df["PATIENT_ID"].nunique()
 
+    # Total unique patients
+    total_patient_n = df.select(pl.col("PATIENT_ID").n_unique()).item()
+
+    # Unique patients per cancer type
     unique_patient_n_per_cancer = (
-        df.groupby("CANCER_TYPE")["PATIENT_ID"].nunique().to_dict()
+        df.group_by("CANCER_TYPE")
+        .agg(pl.col("PATIENT_ID").n_unique().alias("unique_patients"))
+        .to_dict(as_series=False)
+    )
+    # Convert to {cancer_type: count}
+    unique_patient_n_per_cancer = dict(
+        zip(
+            unique_patient_n_per_cancer["CANCER_TYPE"],
+            unique_patient_n_per_cancer["unique_patients"],
+        )
     )
 
     haemonc_patient_n = None
     if haemonc_cancers is not None:
-        haemonc_patient_n = df[df["CANCER_TYPE"].isin(haemonc_cancers)][
-            "PATIENT_ID"
-        ].nunique()
+        haemonc_patient_n = (
+            df.filter(pl.col("CANCER_TYPE").is_in(haemonc_cancers))
+            .select(pl.col("PATIENT_ID").n_unique())
+            .item()
+        )
 
-    return total_patient_n, unique_patient_n_per_cancer, haemonc_patient_n
+    solid_patient_n = None
+    if solid_cancers is not None:
+        solid_patient_n = (
+            df.filter(pl.col("CANCER_TYPE").is_in(solid_cancers))
+            .select(pl.col("PATIENT_ID").n_unique())
+            .item()
+        )
+
+    return (
+        total_patient_n,
+        unique_patient_n_per_cancer,
+        haemonc_patient_n,
+        solid_patient_n,
+    )
 
 
 def create_df_with_one_row_per_variant(
-    df: pd.DataFrame, columns_to_aggregate: list
-) -> pd.DataFrame:
+    df: pl.DataFrame, columns_to_aggregate: list
+) -> pl.DataFrame:
     """
     Create a DataFrame with one row per unique variant by aggregating
     specified columns.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        Input MAF dataframe with variant information
+    df : pl.DataFrame
+        Input dataframe with variant information
     columns_to_aggregate : list
-        List of columns we want to keep for each variant and aggregate
+        List of columns to aggregate per variant
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame with one row per unique variant and specified
-        fields aggregated to unique values (joined by '&')
+    pl.DataFrame
+        DataFrame with one row per unique variant, with aggregated fields
+        joined by '&'
     """
-    aggregated_df = (
-        df.groupby("grch38_description")[columns_to_aggregate]
-        .agg(lambda x: "&".join(sorted(set(map(str, x)))))
-        .reset_index()
+    aggregated_df = df.group_by("grch38_description").agg(
+        [
+            pl.col(c).unique().sort().str.join("&").alias(c)
+            for c in columns_to_aggregate
+        ]
     )
 
     return aggregated_df
 
 
-def get_truncating_variants(df: pd.DataFrame) -> pd.DataFrame:
+def get_truncating_variants(df: pl.DataFrame) -> pl.DataFrame:
     """
     Extract rows of truncating variants from the Genie data.
 
     Parameters
     ----------
-    df : pd.DataFrame
+    df : pl.DataFrame
         Input Genie MAF data
 
     Returns
     -------
-    pd.DataFrame
+    pl.DataFrame
         DataFrame with truncating variants
     """
-    truncating = df["Variant_Classification"].isin(
-        [
-            "Frame_Shift_Del",
-            "Frame_Shift_Ins",
-            "Nonsense_Mutation",
-        ]
-    ) & (df["HGVSp"].str.contains("Ter", na=False))
+    truncating = df.filter(
+        (
+            pl.col("Variant_Classification").is_in(
+                [
+                    "Frame_Shift_Del",
+                    "Frame_Shift_Ins",
+                    "Nonsense_Mutation",
+                ]
+            )
+        )
+        & (pl.col("HGVSp").str.contains("Ter", literal=True, strict=False))
+    )
+    return truncating
 
-    return df[truncating].copy()
 
-
-def get_inframe_deletions(df: pd.DataFrame) -> pd.DataFrame:
+def get_inframe_deletions(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Get inframe deletions from the DataFrame
+    Get inframe deletions from the Polars DataFrame
 
     Parameters
     ----------
-    df : pd.DataFrame
+    df : pl.DataFrame
         DataFrame containing the Genie data
 
     Returns
     -------
-    pd.DataFrame
+    pl.DataFrame
         DataFrame with inframe deletion variants
     """
-    inframe_deletions = df[
-        df["Variant_Classification"] == "In_Frame_Del"
-    ].copy()
-
-    # Remove any where HGVSc is NaN as we won't get positions from these
-    inframe_deletions = inframe_deletions[inframe_deletions["HGVSc"].notna()]
-
+    inframe_deletions = df.filter(
+        pl.col("Variant_Classification") == "In_Frame_Del"
+    ).filter(pl.col("HGVSc").is_not_null())
     return inframe_deletions
+
+
+def get_rows_for_cancer_types(df: pl.DataFrame, cancer_types: list):
+    """
+    Get rows for cancer types listed from the DataFrame.
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Input dataframe with columns CANCER_TYPE
+    cancer_types : list
+        List of cancer types to filter by
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with rows for specified cancer types
+    """
+    return df.filter(pl.col("CANCER_TYPE").is_in(cancer_types))

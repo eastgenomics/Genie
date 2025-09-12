@@ -71,10 +71,10 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
         DataFrame containing the relevant variants and INFO fields from the
         VCF file.
     """
-    with pysam.VariantFile(vcf_file, "r") as vcf_in:
+    vcf_in = pysam.VariantFile(vcf_file, "r")
+    try:
         # Parse VCF records and generate a dataframe
         records = []
-
         for record in vcf_in:
             row = {
                 "CHROM": str(record.chrom),
@@ -92,6 +92,11 @@ def read_annotated_vcf_to_df(vcf_file: str) -> pd.DataFrame:
             }
 
             records.append(row)
+    finally:
+        try:
+            vcf_in.close()
+        except Exception:
+            pass
 
     vcf_df = pd.DataFrame(records)
 
