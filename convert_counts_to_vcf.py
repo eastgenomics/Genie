@@ -1,4 +1,5 @@
 import argparse
+import math
 import polars as pl
 import pysam
 import re
@@ -290,10 +291,15 @@ def write_variants_to_vcf(
     for row in tqdm(
         genie_counts.iter_rows(named=True), total=genie_counts.height
     ):
-        if row["chrom"] is None or row["pos"] is None:
+        if (
+            row["chrom"] is None
+            or row["pos"] is None
+            or not row.get("ref")
+            or not row.get("alt")
+        ):
             print(
-                "Invalid grch38_description format:"
-                f" {row['grch38_description']}, skipping."
+                "Invalid or incomplete grch38_description:"
+                f" {row.get('grch38_description')}, skipping."
             )
             continue
 
@@ -301,11 +307,16 @@ def write_variants_to_vcf(
         formatted_info_fields = {}
         for field_name, converter in field_converters.items():
             value = row.get(field_name)
-            if value not in (None, "", float("nan")):
-                try:
-                    formatted_info_fields[field_name] = converter(value)
-                except Exception as err:
-                    print(f"Error converting field {field_name}: {err}")
+            if (
+                value is None
+                or value == ""
+                or (isinstance(value, float) and math.isnan(value))
+            ):
+                continue
+            try:
+                formatted_info_fields[field_name] = converter(value)
+            except Exception as err:
+                print(f"Error converting field {field_name}: {err}")
 
         # For each variant, write new variant record with all INFO fields
         # Take 1 away from start due to differences in Pysam representation

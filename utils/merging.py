@@ -54,7 +54,7 @@ def merge_truncating_variants_counts(
     # Get only unique truncating variants to add counts
     truncating_variants_no_dups = truncating_variants.unique(
         subset="grch38_description", keep="first"
-    ).select("Hugo_Symbol", "grch38_description", "CDS_position")
+    ).select(["Hugo_Symbol", "grch38_description", "CDS_position"])
 
     # Merge the truncating variants with the counts
     merged_counts = multi_merge(

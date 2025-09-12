@@ -1,4 +1,5 @@
 import argparse
+import gc
 from datetime import datetime
 
 from utils.file_io import (
@@ -255,6 +256,21 @@ def main():
         on="grch38_description",
         how="left",
     )
+    del (
+        nucleotide_change_counts_all_cancer,
+        nucleotide_change_counts_per_cancer,
+        merged_nt_counts,
+        amino_acid_change_counts_all_cancer,
+        amino_acid_change_counts_per_cancer,
+        merged_aa_counts,
+        truncating_counts_all_cancers,
+        truncating_counts_per_cancer,
+        trunc_counts,
+        inframe_deletions_count_all_cancers,
+        inframe_deletions_count_per_cancer,
+        inframe_deletions_with_counts,
+    )
+    gc.collect()
 
     if args.haemonc_cancer_types:
         print(
@@ -340,6 +356,16 @@ def main():
         one_row_per_variant_agg = one_row_per_variant_agg.join(
             all_ho_counts, on="grch38_description", how="left"
         )
+        del (
+            haemonc_rows,
+            nucleotide_counts_haemonc_cancers,
+            amino_acid_counts_haemonc_cancers,
+            frameshift_counts_haemonc,
+            inframe_deletions_haemonc,
+            inframe_deletions_count_haemonc_cancers,
+            all_ho_counts,
+        )
+        gc.collect()
 
     if args.solid_cancer_types:
         print(
