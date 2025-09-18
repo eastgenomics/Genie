@@ -1,9 +1,7 @@
 import os
-import pandas as pd
 import polars as pl
 import sys
 
-from pandas.testing import assert_frame_equal as assert_frame_equal_pd
 from polars.testing import assert_frame_equal
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

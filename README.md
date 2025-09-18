@@ -195,3 +195,31 @@ python convert_counts_to_vcf.py \
   --fasta Homo_sapiens.GRCh38.dna.toplevel.fa.gz \
   --output Genie_v17_GRCh38_counts.vcf
 ```
+
+You may want to do some sorting and removing of Unknown genes:
+```
+bcftools filter -e 'INFO/Hugo_Symbol=="Unknown"' Genie_v17_GRCh38_counts.vcf -Oz \
+  | bcftools sort -Oz -o Genie_v17_GRCh38_counts_v1.0.0.vcf.gz
+```
+
+## Additional scripts
+### Generate cancer types CSV for input to Genie NHS website
+This script takes the final VCF and generates a file which maps each cancer type from the VCF INFO fields to its display name (original name from the Genie data), its cancer grouping and the total patients count. This is required as input to the [NHS Genie website](https://github.com/eastgenomics/genie_nhs_website).
+Example command:
+```
+python generate_cancer_types_csv.py \
+  --input Genie_v17_GRCh38_counts_v1.0.0.vcf.gz \
+  --all_cancer_types all_cancer_types.txt \
+  --haemonc_cancer_types haemonc_cancer_types.txt \
+  --solid_cancer_types solid_cancer_types.txt \
+  --output genie_cancer_types.csv
+```
+
+Example output format:
+```
+"display_name","vcf_name","is_haemonc","is_solid","total_patient_count"
+"All Cancers","All_Cancers",0,0,180561
+"Haemonc Cancers","Haemonc_Cancers",0,0,15095
+"Solid Cancers","Solid_Cancers",0,0,157909
+"Choroid Plexus Tumor","ChoroidPlexusTumor",0,1,73
+```
