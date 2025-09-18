@@ -187,7 +187,19 @@ def add_whether_each_cancer_type_is_part_of_grouped_cancer_type(
     -------
     cancer_info : dict
         Updated dictionary for whether each cancer type is haemonc or solid
+
+    Raises
+    ------
+    ValueError
+        If there is an overlap between haemonc_cancer_types and solid_cancer_types
     """
+    overlap = set(haemonc_cancer_types) & set(solid_cancer_types)
+    if overlap:
+        raise ValueError(
+            "Overlap detected between haemonc and solid cancer types:"
+            f" {sorted(overlap)}"
+        )
+
     for info_field in cancer_info:
         if info_field["display_name"] in haemonc_cancer_types:
             info_field.update(
