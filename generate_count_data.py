@@ -14,13 +14,13 @@ from utils.aggregation import (
     get_inframe_deletions,
 )
 from utils.counting import (
-    add_deletion_positions,
     count_same_nucleotide_change,
     count_same_nucleotide_change_per_cancer_type,
     count_amino_acid_change,
     count_amino_acid_change_per_cancer_type,
     count_frameshift_truncating_and_nonsense,
     count_frameshift_truncating_and_nonsense_per_cancer_type,
+    add_deletion_positions,
     extract_position_from_hgvsc,
     count_nested_inframe_deletions,
     count_nested_inframe_deletions_per_cancer_type,
