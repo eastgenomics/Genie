@@ -130,7 +130,7 @@ def get_truncating_variants(df: pl.DataFrame) -> pl.DataFrame:
     return truncating
 
 
-def get_inframe_deletions(df: pl.DataFrame) -> pl.DataFrame:
+def get_inframe_deletions(df: pl.DataFrame, column_used: str) -> pl.DataFrame:
     """
     Get inframe deletions from the Polars DataFrame
 
@@ -138,6 +138,8 @@ def get_inframe_deletions(df: pl.DataFrame) -> pl.DataFrame:
     ----------
     df : pl.DataFrame
         DataFrame containing the Genie data
+    column_used : str
+        Column to check for non-null values, either 'HGVSc' or 'HGVSp'
 
     Returns
     -------
@@ -146,7 +148,7 @@ def get_inframe_deletions(df: pl.DataFrame) -> pl.DataFrame:
     """
     inframe_deletions = df.filter(
         pl.col("Variant_Classification") == "In_Frame_Del"
-    ).filter(pl.col("HGVSc").is_not_null())
+    ).filter(pl.col(column_used).is_not_null())
     return inframe_deletions
 
 

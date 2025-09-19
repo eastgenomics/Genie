@@ -125,7 +125,7 @@ class TestGetTruncatingVariants:
 
 
 class TestGetInframeDeletions:
-    def test_get_inframe_deletions_filters_correctly(self):
+    def test_get_inframe_deletions_filters_correctly_hgvsc(self):
         df = pl.DataFrame(
             {
                 "Variant_Classification": [
@@ -136,12 +136,35 @@ class TestGetInframeDeletions:
                 "HGVSc": ["c.123del", None, "c.456A>T"],
             }
         )
-        result = get_inframe_deletions(df)
+        result = get_inframe_deletions(df, column_used="HGVSc")
 
         expected = pl.DataFrame(
             {
                 "Variant_Classification": ["In_Frame_Del"],
                 "HGVSc": ["c.123del"],
+            }
+        )
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+    def test_get_inframe_deletions_filters_correctly_hgvsp(self):
+        df = pl.DataFrame(
+            {
+                "Variant_Classification": [
+                    "In_Frame_Del",
+                    "In_Frame_Del",
+                    "Missense_Mutation",
+                ],
+                "HGVSp": ["p.His42dup", None, "p.His41_His42dup"],
+            }
+        )
+        result = get_inframe_deletions(df, column_used="HGVSp")
+
+        expected = pl.DataFrame(
+            {
+                "Variant_Classification": ["In_Frame_Del"],
+                "HGVSp": ["p.His42dup"],
             }
         )
         assert_frame_equal(

@@ -524,84 +524,6 @@ class TestExtractPositionFromHGVSc:
         )
 
 
-class TestCountPatientsWithVariantAtSamePositionOrDownstream:
-    def test_count_downstream(self):
-        df = pl.from_dict(
-            {
-                "Hugo_Symbol": [
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                ],
-                "CDS_position": [
-                    480,
-                    481,
-                    481,
-                    483,
-                    484,
-                    485,
-                    511,
-                    512,
-                    513,
-                    514,
-                ],
-                "PATIENT_ID": [
-                    "patient_1",
-                    "patient_1",
-                    "patient_2",
-                    "patient_3",
-                    "patient_4",
-                    "patient_5",
-                    "patient_5",
-                    "patient_6",
-                    "patient_7",
-                    "patient_8",
-                ],
-            }
-        )
-
-        result = utils.counting.count_downstream(df)
-
-        expected = pl.from_dict(
-            {
-                "Hugo_Symbol": [
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                ],
-                "CDS_position": [
-                    480,
-                    481,
-                    483,
-                    484,
-                    485,
-                    511,
-                    512,
-                    513,
-                    514,
-                ],
-                "downstream_patient_count": [8, 8, 6, 5, 4, 4, 3, 2, 1],
-            }
-        )
-
-        assert_frame_equal(
-            result, expected, check_column_order=False, check_row_order=False
-        )
-
-
 class TestCountFrameshiftTruncatingAndNonsenseInCancers:
     def test_count_frameshift_truncating_and_nonsense(self):
         df = pl.from_dict(
@@ -615,6 +537,15 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "GENE1",
                     "GENE1",
                 ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                ],
                 "CDS_position": [
                     480,
                     481,
@@ -631,7 +562,7 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "patient_3",
                     "patient_4",
                     "patient_5",
-                    "patient_5",
+                    "patient_1",
                 ],
             }
         )
@@ -650,13 +581,21 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "GENE1",
                     "GENE1",
                 ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                ],
                 "CDS_position": [480, 481, 483, 484, 485, 511],
                 "SameOrDownstreamTruncatingVariantsPerCDS.All_Cancers_Count_N_500": [
-                    5,
-                    5,
-                    3,
+                    4,
+                    4,
                     2,
                     1,
+                    2,
                     1,
                 ],
             }
@@ -679,6 +618,15 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     "GENE1",
                     "GENE1",
                     "GENE1",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
                 ],
                 "CDS_position": [
                     480,
@@ -732,6 +680,14 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     "GENE1",
                     "GENE1",
                 ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                ],
                 "CDS_position": [480, 481, 483, 484, 485, 511],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 1_Count_N_500": [
                     2,
@@ -742,10 +698,10 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                 ],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 2_Count_N_4": [
-                    2,
-                    2,
                     1,
                     1,
+                    0,
+                    0,
                     1,
                     1,
                 ],
@@ -758,10 +714,10 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                 ],
                 "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 4_Count_N_50": [
-                    2,
-                    2,
-                    2,
                     1,
+                    1,
+                    1,
+                    0,
                     1,
                     0,
                 ],
@@ -781,8 +737,8 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
         )
 
 
-class TestExtractHGVScDeletionPositions:
-    def test_add_deletion_positions(self):
+class TestAddDeletionPositions:
+    def test_add_deletion_positions_hgvsc(self):
         df = pl.from_dict(
             {
                 "HGVSc": [
@@ -792,7 +748,7 @@ class TestExtractHGVScDeletionPositions:
                 ]
             }
         )
-        result = utils.counting.add_deletion_positions(df)
+        result = utils.counting.add_deletion_positions(df, source="HGVSc")
         expected = pl.from_dict(
             {
                 "HGVSc": [
@@ -808,63 +764,37 @@ class TestExtractHGVScDeletionPositions:
             result, expected, check_column_order=False, check_row_order=False
         )
 
-
-class TestCountPatientsWithNestedDeletions:
-    def test_count_patients_with_nested_deletions(self):
+    def test_add_deletion_positions_hgvsp(self):
         df = pl.from_dict(
             {
-                "Hugo_Symbol": [
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                    "GENE1",
-                ],
-                "del_start": [
-                    480,
-                    481,
-                    481,
-                    483,
-                    484,
-                    485,
-                ],
-                "del_end": [
-                    485,
-                    482,
-                    482,
-                    484,
-                    485,
-                    485,
-                ],
-                "PATIENT_ID": [
-                    "patient_1",
-                    "patient_1",
-                    "patient_2",
-                    "patient_3",
-                    "patient_4",
-                    "patient_5",
-                ],
+                "HGVSp": [
+                    "p.Asp359_Thr364delinsGlyArgAla",
+                    "p.Gln367_Gln379del",
+                    "p.Leu370del",
+                ]
             }
         )
-
-        result = utils.counting.count_patients_with_nested_deletions(df)
-
+        result = utils.counting.add_deletion_positions(df, source="HGVSp")
         expected = pl.from_dict(
             {
-                "del_start": [480, 481, 483, 484, 485],
-                "del_end": [485, 482, 484, 485, 485],
-                "nested_patient_count": [5, 2, 1, 2, 1],
+                "HGVSp": [
+                    "p.Asp359_Thr364delinsGlyArgAla",
+                    "p.Gln367_Gln379del",
+                    "p.Leu370del",
+                ],
+                "del_start": [359, 367, 370],
+                "del_end": [364, 379, 370],
             }
         )
-
         assert_frame_equal(
             result, expected, check_column_order=False, check_row_order=False
         )
 
 
 class TestCountNestedInframeDeletionsAllCancers:
-    def test_count_nested_inframe_deletions_all_cancers(self):
+    def test_count_nested_inframe_deletions_all_cancers_one_transcript_per_gene(
+        self,
+    ):
         df = pl.from_dict(
             {
                 "Hugo_Symbol": [
@@ -874,6 +804,14 @@ class TestCountNestedInframeDeletionsAllCancers:
                     "GENE2",
                     "GENE3",
                     "GENE3",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript3",
                 ],
                 "del_start": [
                     480,
@@ -915,6 +853,13 @@ class TestCountNestedInframeDeletionsAllCancers:
                     "GENE3",
                     "GENE3",
                 ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript3",
+                ],
                 "del_start": [480, 481, 483, 484, 485],
                 "del_end": [485, 482, 484, 485, 485],
                 "NestedInframeDeletionsPerCDS.All_Cancers_Count_N_5000": [
@@ -931,9 +876,98 @@ class TestCountNestedInframeDeletionsAllCancers:
             result, expected, check_row_order=False, check_column_order=False
         )
 
+    def test_count_nested_inframe_deletions_all_cancers_multiple_transcripts_per_gene(
+        self,
+    ):
+        df = pl.from_dict(
+            {
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE2",
+                    "GENE3",
+                    "GENE3",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript4",
+                    "Transcript4",
+                ],
+                "del_start": [
+                    480,
+                    481,
+                    481,
+                    483,
+                    484,
+                    485,
+                ],
+                "del_end": [
+                    485,
+                    482,
+                    482,
+                    484,
+                    485,
+                    485,
+                ],
+                "PATIENT_ID": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_3",
+                    "patient_4",
+                    "patient_5",
+                ],
+            }
+        )
+
+        result = utils.counting.count_nested_inframe_deletions(
+            df, "All_Cancers", 5000
+        )
+
+        expected = pl.from_dict(
+            {
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE2",
+                    "GENE3",
+                    "GENE3",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript4",
+                    "Transcript4",
+                ],
+                "del_start": [480, 481, 481, 483, 484, 485],
+                "del_end": [485, 482, 482, 484, 485, 485],
+                "NestedInframeDeletionsPerCDS.All_Cancers_Count_N_5000": [
+                    1,
+                    1,
+                    1,
+                    1,
+                    2,
+                    1,
+                ],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_row_order=False, check_column_order=False
+        )
+
 
 class TestCountNestedInframeDeletionsPerCancerType:
-    def test_count_nested_inframe_deletions_per_cancer_type(self):
+    def test_count_nested_inframe_deletions_per_cancer_type_one_transcript_per_gene(
+        self,
+    ):
         df = pl.from_dict(
             {
                 "Hugo_Symbol": [
@@ -943,6 +977,14 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     "GENE1",
                     "GENE1",
                     "GENE1",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
                 ],
                 "del_start": [
                     480,
@@ -992,6 +1034,13 @@ class TestCountNestedInframeDeletionsPerCancerType:
         expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE1", "GENE1", "GENE1"],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                ],
                 "del_start": [480, 481, 483, 484, 485],
                 "del_end": [485, 482, 484, 485, 485],
                 "NestedInframeDeletionsPerCDS.Cancer 1_Count_N_500": [
@@ -1017,6 +1066,126 @@ class TestCountNestedInframeDeletionsPerCancerType:
                 ],
                 "NestedInframeDeletionsPerCDS.Cancer 4_Count_N_50": [
                     1,
+                    0,
+                    0,
+                    1,
+                    1,
+                ],
+                "NestedInframeDeletionsPerCDS.Cancer 5_Count_N_120": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_row_order=False, check_column_order=False
+        )
+
+    def test_count_nested_inframe_deletions_per_cancer_type_multiple_transcripts_per_gene(
+        self,
+    ):
+        df = pl.from_dict(
+            {
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                ],
+                "del_start": [
+                    480,
+                    481,
+                    481,
+                    483,
+                    484,
+                    485,
+                ],
+                "del_end": [
+                    485,
+                    482,
+                    482,
+                    484,
+                    485,
+                    485,
+                ],
+                "PATIENT_ID": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_3",
+                    "patient_4",
+                    "patient_5",
+                ],
+                "CANCER_TYPE": [
+                    "Cancer 1",
+                    "Cancer 1",
+                    "Cancer 2",
+                    "Cancer 3",
+                    "Cancer 1",
+                    "Cancer 4",
+                ],
+            }
+        )
+        per_patient_cancer_total = {
+            "Cancer 1": 500,
+            "Cancer 2": 4,
+            "Cancer 3": 3,
+            "Cancer 4": 50,
+            "Cancer 5": 120,
+        }
+        result = utils.counting.count_nested_inframe_deletions_per_cancer_type(
+            df, per_patient_cancer_total
+        )
+
+        expected = pl.from_dict(
+            {
+                "Hugo_Symbol": ["GENE1", "GENE1", "GENE1", "GENE1", "GENE1"],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                ],
+                "del_start": [480, 481, 483, 484, 485],
+                "del_end": [485, 482, 484, 485, 485],
+                "NestedInframeDeletionsPerCDS.Cancer 1_Count_N_500": [
+                    1,
+                    1,
+                    0,
+                    1,
+                    0,
+                ],
+                "NestedInframeDeletionsPerCDS.Cancer 2_Count_N_4": [
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                ],
+                "NestedInframeDeletionsPerCDS.Cancer 3_Count_N_3": [
+                    1,
+                    0,
+                    1,
+                    0,
+                    0,
+                ],
+                "NestedInframeDeletionsPerCDS.Cancer 4_Count_N_50": [
+                    0,
                     0,
                     0,
                     1,

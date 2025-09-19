@@ -54,13 +54,15 @@ def merge_truncating_variants_counts(
     # Get only unique truncating variants to add counts
     truncating_variants_no_dups = truncating_variants.unique(
         subset="grch38_description", keep="first"
-    ).select(["Hugo_Symbol", "grch38_description", "CDS_position"])
+    ).select(
+        ["Hugo_Symbol", "grch38_description", "Transcript_ID", "CDS_position"]
+    )
 
     # Merge the truncating variants with the counts
     merged_counts = multi_merge(
         truncating_variants_no_dups,
         [truncating_counts_all_cancers, truncating_counts_per_cancer],
-        on=["Hugo_Symbol", "CDS_position"],
+        on=["Hugo_Symbol", "Transcript_ID", "CDS_position"],
         how="left",
     )
 
@@ -96,22 +98,30 @@ def merge_inframe_deletions_with_counts(
     # Remove duplicates of the same variant and deletion start and ends
     inframe_with_positions_no_dups = inframe_deletions_with_positions.unique(
         subset="grch38_description", keep="first"
-    ).select(["Hugo_Symbol", "grch38_description", "del_start", "del_end"])
+    ).select(
+        [
+            "Hugo_Symbol",
+            "Transcript_ID",
+            "grch38_description",
+            "del_start",
+            "del_end",
+        ]
+    )
 
     # Merge the inframe deletion counts together
     merged_counts = multi_merge(
         inframe_deletions_count_all_cancers,
         [inframe_deletions_count_per_cancer],
-        on=["Hugo_Symbol", "del_start", "del_end"],
+        on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
         how="left",
     )
 
     # Merge the unique inframe deletions with the counts
     inframe_deletions_with_counts = inframe_with_positions_no_dups.join(
         merged_counts,
-        on=["Hugo_Symbol", "del_start", "del_end"],
+        on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
         how="left",
-    ).drop(["Hugo_Symbol", "del_start", "del_end"])
+    ).drop(["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"])
 
     return inframe_deletions_with_counts
 

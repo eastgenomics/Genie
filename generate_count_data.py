@@ -14,13 +14,13 @@ from utils.aggregation import (
     get_inframe_deletions,
 )
 from utils.counting import (
+    add_deletion_positions,
     count_same_nucleotide_change,
     count_same_nucleotide_change_per_cancer_type,
     count_amino_acid_change,
     count_amino_acid_change_per_cancer_type,
     count_frameshift_truncating_and_nonsense,
     count_frameshift_truncating_and_nonsense_per_cancer_type,
-    add_deletion_positions,
     extract_position_from_hgvsc,
     count_nested_inframe_deletions,
     count_nested_inframe_deletions_per_cancer_type,
@@ -77,6 +77,16 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--column_for_inframe_deletions",
+        required=True,
+        choices=["HGVSc", "HGVSp"],
+        help=(
+            "Column to use for extracting deletion positions for inframe"
+            " deletions"
+        ),
+    )
+
+    parser.add_argument(
         "--output", required=True, type=str, help="Name of output file"
     )
 
@@ -88,6 +98,7 @@ def main():
     genie_data = read_in_to_polars_df(args.input, sep="\t")
     columns_to_aggregate = read_txt_file_to_list(args.columns_to_aggregate)
 
+    deletion_source = args.column_for_inframe_deletions
     haemonc_cancers = solid_cancers = None
     if args.haemonc_cancer_types:
         haemonc_cancers = read_txt_file_to_list(args.haemonc_cancer_types)
@@ -176,6 +187,7 @@ def main():
     truncating_variants = get_truncating_variants(genie_data).select(
         "Hugo_Symbol",
         "grch38_description",
+        "Transcript_ID",
         "HGVSc",
         "PATIENT_ID",
         "CANCER_TYPE",
@@ -205,14 +217,19 @@ def main():
         f"{datetime.now().replace(microsecond=0)} Generating inframe"
         " deletion counts"
     )
-    inframe_deletions = get_inframe_deletions(genie_data).select(
+    inframe_deletions = get_inframe_deletions(
+        df=genie_data, column_used=deletion_source
+    ).select(
         "grch38_description",
         "Hugo_Symbol",
-        "HGVSc",
+        "Transcript_ID",
+        deletion_source,
         "PATIENT_ID",
         "CANCER_TYPE",
     )
-    inframe_deletions = add_deletion_positions(inframe_deletions)
+    inframe_deletions = add_deletion_positions(
+        inframe_deletions, source=deletion_source
+    )
     inframe_deletions_count_all_cancers = count_nested_inframe_deletions(
         inframe_deletions_df=inframe_deletions,
         cancer_count_type="All_Cancers",
@@ -308,15 +325,16 @@ def main():
         )
 
         inframe_deletions_haemonc = get_inframe_deletions(
-            df=haemonc_rows
+            df=haemonc_rows, column_used=deletion_source
         ).select(
             "Hugo_Symbol",
             "grch38_description",
-            "HGVSc",
+            "Transcript_ID",
+            deletion_source,
             "PATIENT_ID",
         )
         inframe_deletions_haemonc = add_deletion_positions(
-            inframe_deletions_haemonc
+            inframe_deletions_haemonc, source=deletion_source
         )
         inframe_deletions_count_haemonc_cancers = (
             count_nested_inframe_deletions(
@@ -348,6 +366,7 @@ def main():
         all_ho_counts = all_ho_counts.drop(
             "Hugo_Symbol",
             "HGVSp",
+            "Transcript_ID",
             "del_start",
             "del_end",
             "CDS_position",
@@ -402,14 +421,16 @@ def main():
             truncating_variants=truncating_variants,
         )
 
-        inframe_deletions_solid = get_inframe_deletions(df=solid_rows).select(
+        inframe_deletions_solid = get_inframe_deletions(
+            df=solid_rows, column_used=deletion_source
+        ).select(
             "Hugo_Symbol",
             "grch38_description",
-            "HGVSc",
+            deletion_source,
             "PATIENT_ID",
         )
         inframe_deletions_solid = add_deletion_positions(
-            inframe_deletions_solid
+            inframe_deletions_solid, source=deletion_source
         )
         inframe_deletions_count_solid_cancers = count_nested_inframe_deletions(
             inframe_deletions_df=inframe_deletions_solid,
