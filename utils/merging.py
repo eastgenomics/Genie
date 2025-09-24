@@ -1,6 +1,7 @@
 from functools import reduce
 
 import polars as pl
+from sklearn import metrics
 
 
 def multi_merge(
@@ -205,7 +206,7 @@ def reorder_final_columns(
             f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
             f"SameAminoAcidChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
             f"SameOrDownstreamTruncatingVariantsPerCDS.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
-            f"NestedInframeDeletionsPerCDS.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
+            f"NestedInframeDeletionsPer{position_method}.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
         ]
 
     if solid_patient_total is not None:

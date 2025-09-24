@@ -441,9 +441,9 @@ def main():
         one_row_per_variant_agg,
         patient_total,
         per_cancer_patient_total,
+        inframe_naming,
         haemonc_cancer_patient_total,
         solid_cancer_patient_total,
-        inframe_naming,
     )
 
     final_df.write_csv(
