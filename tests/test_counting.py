@@ -473,13 +473,6 @@ class TestCountAminoAcidChangeHaemoncCancers:
                     "4_101_T_G",
                     "20_500_A_C",
                 ],
-                "Hugo_Symbol": ["GENE1", "GENE2", "GENE3", "GENE4"],
-                "HGVSp": [
-                    "p.Ala100Thr",
-                    "p.Gly200Cys",
-                    "p.Gly200Cys",
-                    "p.Lys512His",
-                ],
                 "SameAminoAcidChange.Haemonc_Cancers_Count_N_1000": [
                     1,
                     2,
@@ -841,7 +834,7 @@ class TestCountNestedInframeDeletionsAllCancers:
         )
 
         result = utils.counting.count_nested_inframe_deletions(
-            df, "All_Cancers", 5000
+            df, "All_Cancers", 5000, position_method="CDS"
         )
 
         expected = pl.from_dict(
@@ -925,7 +918,7 @@ class TestCountNestedInframeDeletionsAllCancers:
         )
 
         result = utils.counting.count_nested_inframe_deletions(
-            df, "All_Cancers", 5000
+            df, "All_Cancers", 5000, position_method="CDS"
         )
 
         expected = pl.from_dict(
@@ -1028,7 +1021,7 @@ class TestCountNestedInframeDeletionsPerCancerType:
             "Cancer 5": 120,
         }
         result = utils.counting.count_nested_inframe_deletions_per_cancer_type(
-            df, per_patient_cancer_total
+            df, per_patient_cancer_total, position_method="CDS"
         )
 
         expected = pl.from_dict(
@@ -1148,7 +1141,7 @@ class TestCountNestedInframeDeletionsPerCancerType:
             "Cancer 5": 120,
         }
         result = utils.counting.count_nested_inframe_deletions_per_cancer_type(
-            df, per_patient_cancer_total
+            df, per_patient_cancer_total, position_method="CDS"
         )
 
         expected = pl.from_dict(
