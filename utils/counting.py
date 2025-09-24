@@ -312,7 +312,7 @@ def count_frameshift_truncating_and_nonsense(
         all_results.append(pl.DataFrame(rows))
 
     # Combine all results
-    combined = (
+    df_counts = (
         pl.concat(all_results, how="vertical")
         if all_results
         else pl.DataFrame(
@@ -325,9 +325,10 @@ def count_frameshift_truncating_and_nonsense(
         )
     )
 
-    # Rename downstream count column with cohort info
+    # If this is a grouped (e.g. haemonc cancer) count, then all truncating
+    #  variants should have a count, so add 0 if not present in grouped count
     col_name = f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
-    combined = combined.rename({"downstream_patient_count": col_name})
+    df_counts = df_counts.rename({"downstream_patient_count": col_name})
 
     # If given, join back to truncating_variants to ensure all rows are present
     if truncating_variants is not None:
@@ -342,7 +343,7 @@ def count_frameshift_truncating_and_nonsense(
             )
             .unique()
             .join(
-                combined,
+                df_counts,
                 on=["Hugo_Symbol", "Transcript_ID", "CDS_position"],
                 how="left",
             )
@@ -350,7 +351,7 @@ def count_frameshift_truncating_and_nonsense(
         ).drop("Hugo_Symbol", "Transcript_ID", "CDS_position")
         return result
 
-    return combined
+    return df_counts
 
 
 def count_frameshift_truncating_and_nonsense_per_cancer_type(
@@ -593,7 +594,7 @@ def count_nested_inframe_deletions(
         all_results.append(pl.DataFrame(rows))
 
     # Combine all results
-    combined = (
+    inframe_counts = (
         pl.concat(all_results, how="vertical")
         if all_results
         else pl.DataFrame(
@@ -609,7 +610,7 @@ def count_nested_inframe_deletions(
 
     # Rename nested count column with cohort info
     col_name = f"NestedInframeDeletionsPer{position_method}.{cancer_count_type}_Count_N_{patient_total}"
-    combined = combined.rename({"nested_patient_count": col_name})
+    inframe_counts = inframe_counts.rename({"nested_patient_count": col_name})
 
     # If given, join back to reference deletions to ensure all rows are present
     if inframe_deletions is not None:
@@ -625,7 +626,7 @@ def count_nested_inframe_deletions(
             )
             .unique()
             .join(
-                combined,
+                inframe_counts,
                 on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
                 how="left",
             )
@@ -634,7 +635,7 @@ def count_nested_inframe_deletions(
 
         return result
 
-    return combined
+    return inframe_counts
 
 
 def count_nested_inframe_deletions_per_cancer_type(
@@ -713,7 +714,7 @@ def count_nested_inframe_deletions_per_cancer_type(
                 all_results.append(pl.DataFrame(rows))
 
     # Combine all results
-    combined = (
+    nested_counts_df = (
         pl.concat(all_results, how="vertical")
         if all_results
         else pl.DataFrame(
@@ -729,14 +730,14 @@ def count_nested_inframe_deletions_per_cancer_type(
     )
 
     # Pivot cancer types into columns
-    pivot_df = combined.pivot(
+    pivot_df = nested_counts_df.pivot(
         index=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
         on="CANCER_TYPE",
         values="nested_patient_count",
         aggregate_function="first",
     ).fill_null(0)
 
-    # Rename columns with patient totals
+    # Rename columns to include patient totals
     column_mapping = {
         col: (
             f"NestedInframeDeletionsPer{position_method}.{col}_Count_N_{per_cancer_patient_total[col]}"
