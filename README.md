@@ -174,7 +174,7 @@ This script generates counts of how many unique patients each variant is present
 - The number of patients with inframe deletions which cover the same CDS positions or are nested within the deletion.
     - These counts are only present for the `In_Frame_Del` variant type.
 
-This requires a file (`--columns_to_aggregate.txt`) where each Genie annotation to be kept in the final VCF are provided, one per line. A file of cancer types which are classified as haemonc-related cancer types are (`--haemonc_cancer_types.txt`) and a file of cancer types which are classified as solid cancer types (`--solid_cancer_types.txt`) can also be provided in order to generate grouped counts.
+This requires a file (`--columns_to_aggregate.txt`) where each Genie annotation to be kept in the final VCF are provided, one per line, and (`--column_for_inframe_deletions`) which specifies whether to extract positions of an inframe deletion from the HGVSc or HGVSp notation. A file of cancer types which are classified as haemonc-related cancer types are (`--haemonc_cancer_types.txt`) and a file of cancer types which are classified as solid cancer types (`--solid_cancer_types.txt`) can also be provided in order to generate grouped counts.
 
 Example command:
 ```
@@ -183,6 +183,7 @@ python generate_count_data.py \
   --columns_to_aggregate columns_to_aggregate.txt \
   --haemonc_cancer_types haemonc_cancer_types.txt (optional) \
   --solid_cancer_types solid_cancer_types.txt (optional) \
+  --column_for_inframe_deletions HGVSp [HGVSc or HGVSp] \
   --output Genie_v17_GRCh38_counts.tsv
 ```
 
