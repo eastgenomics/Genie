@@ -126,6 +126,13 @@ def get_truncating_variants(df: pl.DataFrame) -> pl.DataFrame:
             )
         )
         & (pl.col("HGVSp").str.contains("Ter", literal=True, strict=False))
+    ).select(
+        "Hugo_Symbol",
+        "grch38_description",
+        "Transcript_ID",
+        "HGVSc",
+        "PATIENT_ID",
+        "CANCER_TYPE",
     )
     return truncating
 
@@ -146,9 +153,18 @@ def get_inframe_deletions(df: pl.DataFrame, column_used: str) -> pl.DataFrame:
     pl.DataFrame
         DataFrame with inframe deletion variants
     """
-    inframe_deletions = df.filter(
-        pl.col("Variant_Classification") == "In_Frame_Del"
-    ).filter(pl.col(column_used).is_not_null())
+    inframe_deletions = (
+        df.filter(pl.col("Variant_Classification") == "In_Frame_Del").filter(
+            pl.col(column_used).is_not_null()
+        )
+    ).select(
+        "grch38_description",
+        "Hugo_Symbol",
+        "Transcript_ID",
+        column_used,
+        "PATIENT_ID",
+        "CANCER_TYPE",
+    )
     return inframe_deletions
 
 

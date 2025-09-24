@@ -1,3 +1,5 @@
+from functools import reduce
+
 import polars as pl
 
 
@@ -67,7 +69,9 @@ def merge_truncating_variants_counts(
     )
 
     # Remove these columns to not cause merge issues later
-    merged_counts = merged_counts.drop(["Hugo_Symbol", "CDS_position"])
+    merged_counts = merged_counts.drop(
+        ["Hugo_Symbol", "Transcript_ID", "CDS_position"]
+    )
 
     return merged_counts
 
@@ -107,13 +111,18 @@ def merge_inframe_deletions_with_counts(
             "del_end",
         ]
     )
-
-    # Merge the inframe deletion counts together
-    merged_counts = multi_merge(
+    dfs_to_merge = [
         inframe_deletions_count_all_cancers,
-        [inframe_deletions_count_per_cancer],
-        on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
-        how="left",
+        inframe_deletions_count_per_cancer,
+    ]
+    # Merge the inframe deletion counts together
+    merged_counts = reduce(
+        lambda left, right: left.join(
+            right,
+            on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
+            how="left",
+        ),
+        dfs_to_merge,
     )
 
     # Merge the unique inframe deletions with the counts
@@ -130,6 +139,7 @@ def reorder_final_columns(
     df: pl.DataFrame,
     patient_total: int,
     per_cancer_patient_total: dict,
+    position_method: str,
     haemonc_patient_total: int = None,
     solid_patient_total: int = None,
 ) -> pl.DataFrame:
@@ -149,6 +159,9 @@ def reorder_final_columns(
         Total number of unique patients with haemonc cancers
     solid_patient_total : int, optional
         Total number of unique patients with solid cancers
+    position_method : str
+        Method used to determine deletion positions, "CDS" or "AA"
+
     Returns
     -------
     pl.DataFrame
@@ -184,7 +197,7 @@ def reorder_final_columns(
         f"SameNucleotideChange.All_Cancers_Count_N_{patient_total}",
         f"SameAminoAcidChange.All_Cancers_Count_N_{patient_total}",
         f"SameOrDownstreamTruncatingVariantsPerCDS.All_Cancers_Count_N_{patient_total}",
-        f"NestedInframeDeletionsPerCDS.All_Cancers_Count_N_{patient_total}",
+        f"NestedInframeDeletionsPer{position_method}.All_Cancers_Count_N_{patient_total}",
     ]
 
     if haemonc_patient_total is not None:
@@ -200,7 +213,7 @@ def reorder_final_columns(
             f"SameNucleotideChange.Solid_Cancers_Count_N_{solid_patient_total}",
             f"SameAminoAcidChange.Solid_Cancers_Count_N_{solid_patient_total}",
             f"SameOrDownstreamTruncatingVariantsPerCDS.Solid_Cancers_Count_N_{solid_patient_total}",
-            f"NestedInframeDeletionsPerCDS.Solid_Cancers_Count_N_{solid_patient_total}",
+            f"NestedInframeDeletionsPer{position_method}.Solid_Cancers_Count_N_{solid_patient_total}",
         ]
 
     for cancer_type, n_patients in per_cancer_patient_total.items():
@@ -209,7 +222,7 @@ def reorder_final_columns(
                 f"SameNucleotideChange.{cancer_type}_Count_N_{n_patients}",
                 f"SameAminoAcidChange.{cancer_type}_Count_N_{n_patients}",
                 f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_type}_Count_N_{n_patients}",
-                f"NestedInframeDeletionsPerCDS.{cancer_type}_Count_N_{n_patients}",
+                f"NestedInframeDeletionsPer{position_method}.{cancer_type}_Count_N_{n_patients}",
             ]
         )
 
