@@ -77,6 +77,16 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--column_for_inframe_deletions",
+        required=True,
+        choices=["HGVSc", "HGVSp"],
+        help=(
+            "Column to use for extracting deletion positions for inframe"
+            " deletions"
+        ),
+    )
+
+    parser.add_argument(
         "--output", required=True, type=str, help="Name of output file"
     )
 
@@ -88,6 +98,11 @@ def main():
     genie_data = read_in_to_polars_df(args.input, sep="\t")
     columns_to_aggregate = read_txt_file_to_list(args.columns_to_aggregate)
 
+    deletion_source = args.column_for_inframe_deletions
+    if deletion_source == "HGVSc":
+        inframe_naming = "CDS"
+    else:
+        inframe_naming = "AA"
     haemonc_cancers = solid_cancers = None
     if args.haemonc_cancer_types:
         haemonc_cancers = read_txt_file_to_list(args.haemonc_cancer_types)
@@ -173,13 +188,7 @@ def main():
         f"{datetime.now().replace(microsecond=0)} Generating truncating"
         " variant counts"
     )
-    truncating_variants = get_truncating_variants(genie_data).select(
-        "Hugo_Symbol",
-        "grch38_description",
-        "HGVSc",
-        "PATIENT_ID",
-        "CANCER_TYPE",
-    )
+    truncating_variants = get_truncating_variants(genie_data)
     truncating_variants = extract_position_from_hgvsc(truncating_variants)
 
     truncating_counts_all_cancers = count_frameshift_truncating_and_nonsense(
@@ -205,27 +214,25 @@ def main():
         f"{datetime.now().replace(microsecond=0)} Generating inframe"
         " deletion counts"
     )
-    inframe_deletions = get_inframe_deletions(genie_data).select(
-        "grch38_description",
-        "Hugo_Symbol",
-        "HGVSc",
-        "PATIENT_ID",
-        "CANCER_TYPE",
+    inframe_deletions = get_inframe_deletions(
+        df=genie_data, column_used=deletion_source
     )
-    inframe_deletions = add_deletion_positions(inframe_deletions)
+    inframe_deletions = add_deletion_positions(
+        inframe_deletions, source=deletion_source
+    )
     inframe_deletions_count_all_cancers = count_nested_inframe_deletions(
         inframe_deletions_df=inframe_deletions,
         cancer_count_type="All_Cancers",
         patient_total=patient_total,
+        position_method=inframe_naming,
     )
-
     inframe_deletions_count_per_cancer = (
         count_nested_inframe_deletions_per_cancer_type(
             inframe_deletions_df=inframe_deletions,
             per_cancer_patient_total=per_cancer_patient_total,
+            position_method=inframe_naming,
         )
     )
-
     inframe_deletions_with_counts = merge_inframe_deletions_with_counts(
         inframe_deletions_with_positions=inframe_deletions,
         inframe_deletions_count_all_cancers=inframe_deletions_count_all_cancers,
@@ -308,15 +315,10 @@ def main():
         )
 
         inframe_deletions_haemonc = get_inframe_deletions(
-            df=haemonc_rows
-        ).select(
-            "Hugo_Symbol",
-            "grch38_description",
-            "HGVSc",
-            "PATIENT_ID",
+            df=haemonc_rows, column_used=deletion_source
         )
         inframe_deletions_haemonc = add_deletion_positions(
-            inframe_deletions_haemonc
+            inframe_deletions_haemonc, source=deletion_source
         )
         inframe_deletions_count_haemonc_cancers = (
             count_nested_inframe_deletions(
@@ -324,6 +326,7 @@ def main():
                 cancer_count_type="Haemonc_Cancers",
                 patient_total=haemonc_cancer_patient_total,
                 inframe_deletions=inframe_deletions,
+                position_method=inframe_naming,
             )
         )
 
@@ -335,22 +338,14 @@ def main():
 
         all_ho_counts = all_ho_counts.join(
             frameshift_counts_haemonc,
-            on=["Hugo_Symbol", "grch38_description"],
+            on="grch38_description",
             how="left",
         )
 
         all_ho_counts = all_ho_counts.join(
             inframe_deletions_count_haemonc_cancers,
-            on=["Hugo_Symbol", "grch38_description"],
+            on="grch38_description",
             how="left",
-        )
-
-        all_ho_counts = all_ho_counts.drop(
-            "Hugo_Symbol",
-            "HGVSp",
-            "del_start",
-            "del_end",
-            "CDS_position",
         )
 
         one_row_per_variant_agg = one_row_per_variant_agg.join(
@@ -402,20 +397,18 @@ def main():
             truncating_variants=truncating_variants,
         )
 
-        inframe_deletions_solid = get_inframe_deletions(df=solid_rows).select(
-            "Hugo_Symbol",
-            "grch38_description",
-            "HGVSc",
-            "PATIENT_ID",
+        inframe_deletions_solid = get_inframe_deletions(
+            df=solid_rows, column_used=deletion_source
         )
         inframe_deletions_solid = add_deletion_positions(
-            inframe_deletions_solid
+            inframe_deletions_solid, source=deletion_source
         )
         inframe_deletions_count_solid_cancers = count_nested_inframe_deletions(
             inframe_deletions_df=inframe_deletions_solid,
             cancer_count_type="Solid_Cancers",
             patient_total=solid_cancer_patient_total,
             inframe_deletions=inframe_deletions,
+            position_method=inframe_naming,
         )
 
         all_solid_counts = nucleotide_counts_solid_cancers.join(
@@ -426,22 +419,14 @@ def main():
 
         all_solid_counts = all_solid_counts.join(
             frameshift_counts_solid,
-            on=["Hugo_Symbol", "grch38_description"],
+            on="grch38_description",
             how="left",
         )
 
         all_solid_counts = all_solid_counts.join(
             inframe_deletions_count_solid_cancers,
-            on=["Hugo_Symbol", "grch38_description"],
+            on="grch38_description",
             how="left",
-        )
-
-        all_solid_counts = all_solid_counts.drop(
-            "Hugo_Symbol",
-            "HGVSp",
-            "del_start",
-            "del_end",
-            "CDS_position",
         )
 
         one_row_per_variant_agg = one_row_per_variant_agg.join(
@@ -456,6 +441,7 @@ def main():
         one_row_per_variant_agg,
         patient_total,
         per_cancer_patient_total,
+        inframe_naming,
         haemonc_cancer_patient_total,
         solid_cancer_patient_total,
     )

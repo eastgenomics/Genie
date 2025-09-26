@@ -159,7 +159,7 @@ def count_amino_acid_change(
                 how="left",
             )
             .with_columns(pl.col(count_col).fill_null(0))
-        )
+        ).drop("Hugo_Symbol", "HGVSp")
         return result
 
     return amino_acid_change_counts
@@ -256,45 +256,6 @@ def extract_position_from_hgvsc(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def count_downstream(group: pl.DataFrame) -> pl.DataFrame:
-    """
-    Count how many unique patients have a variant at the same position or
-    downstream for rows in the same gene.
-
-    Parameters
-    ----------
-    group : pl.DataFrame
-        DataFrame containing variants in the same gene
-
-    Returns
-    -------
-    pl.DataFrame
-        DataFrame with CDS_position and downstream_patient_count
-    """
-    gene = group[0, "Hugo_Symbol"]
-
-    # Get unique positions, sorted
-    positions = sorted(set(group["CDS_position"].to_list()))
-    patient_ids = group["PATIENT_ID"].to_list()
-
-    rows = []
-    for pos in positions:
-        downstream = {
-            pid
-            for j, pid in enumerate(patient_ids)
-            if group["CDS_position"][j] >= pos
-        }
-        rows.append(
-            {
-                "Hugo_Symbol": gene,
-                "CDS_position": pos,
-                "downstream_patient_count": len(downstream),
-            }
-        )
-
-    return pl.DataFrame(rows)
-
-
 def count_frameshift_truncating_and_nonsense(
     df: pl.DataFrame,
     cancer_count_type: str,
@@ -308,7 +269,8 @@ def count_frameshift_truncating_and_nonsense(
     Parameters
     ----------
     df : pl.DataFrame
-        DataFrame containing truncating variants with 'Hugo_Symbol' and 'CDS_position'.
+        DataFrame containing truncating variants with 'Hugo_Symbol',
+        'Transcript_ID', and 'CDS_position'.
     cancer_count_type : str
         Cancer count type (used in column naming)
     patient_total : int
@@ -319,27 +281,74 @@ def count_frameshift_truncating_and_nonsense(
     pl.DataFrame
         DataFrame with 'CDS_position' and downstream counts per gene.
     """
-    # Compute downstream counts using cumsum of unique patients
-    df_counts = df.group_by("Hugo_Symbol").map_groups(count_downstream)
+    all_results = []
 
-    col_name = f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
-    df_counts = df_counts.rename({"downstream_patient_count": col_name})
+    # Iterate over unique (gene, transcript) pairs
+    for gene, transcript in (
+        df.select(["Hugo_Symbol", "Transcript_ID"]).unique().iter_rows()
+    ):
+        subset = df.filter(
+            (pl.col("Hugo_Symbol") == gene)
+            & (pl.col("Transcript_ID") == transcript)
+        )
+        positions = sorted(subset["CDS_position"].unique().to_list())
+
+        rows = []
+        for pos in positions:
+            downstream_patients = {
+                pid
+                for j, pid in enumerate(subset["PATIENT_ID"])
+                if subset["CDS_position"][j] >= pos
+            }
+            rows.append(
+                {
+                    "Hugo_Symbol": gene,
+                    "Transcript_ID": transcript,
+                    "CDS_position": pos,
+                    "downstream_patient_count": len(downstream_patients),
+                }
+            )
+
+        all_results.append(pl.DataFrame(rows))
+
+    # Combine all results
+    df_counts = (
+        pl.concat(all_results, how="vertical")
+        if all_results
+        else pl.DataFrame(
+            {
+                "Hugo_Symbol": [],
+                "Transcript_ID": [],
+                "CDS_position": [],
+                "downstream_patient_count": [],
+            }
+        )
+    )
 
     # If this is a grouped (e.g. haemonc cancer) count, then all truncating
     #  variants should have a count, so add 0 if not present in grouped count
+    col_name = f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
+    df_counts = df_counts.rename({"downstream_patient_count": col_name})
+
+    # If given, join back to truncating_variants to ensure all rows are present
     if truncating_variants is not None:
         result = (
             truncating_variants.select(
-                ["grch38_description", "Hugo_Symbol", "CDS_position"]
+                [
+                    "grch38_description",
+                    "Hugo_Symbol",
+                    "Transcript_ID",
+                    "CDS_position",
+                ]
             )
             .unique()
             .join(
                 df_counts,
-                on=["Hugo_Symbol", "CDS_position"],
+                on=["Hugo_Symbol", "Transcript_ID", "CDS_position"],
                 how="left",
             )
             .with_columns(pl.col(col_name).fill_null(0))
-        )
+        ).drop("Hugo_Symbol", "Transcript_ID", "CDS_position")
         return result
 
     return df_counts
@@ -352,18 +361,35 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
     """
     Count how many patients have a frameshift (truncating) or nonsense variant
     at the same position or downstream in the same gene per cancer type.
-    """
 
+    Parameters
+    ----------
+    df : pl.DataFrame
+        DataFrame containing truncating variants with 'Hugo_Symbol',
+        'Transcript_ID', 'CDS_position', 'CANCER_TYPE', and 'PATIENT_ID'.
+    per_cancer_patient_total : dict
+        Total number of unique patients in the dataset per cancer type.
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with CDS_position and downstream counts per gene per cancer type.
+    """
     all_results = []
 
-    # Iterate over unique genes
-    for gene in df["Hugo_Symbol"].unique().to_list():
-        gene_df = df.filter(pl.col("Hugo_Symbol") == gene)
-        gene_positions = sorted(gene_df["CDS_position"].unique().to_list())
+    # Iterate over unique (gene, transcript) pairs
+    for gene, transcript in (
+        df.select(["Hugo_Symbol", "Transcript_ID"]).unique().iter_rows()
+    ):
+        gene_tx_df = df.filter(
+            (pl.col("Hugo_Symbol") == gene)
+            & (pl.col("Transcript_ID") == transcript)
+        )
+        gene_positions = sorted(gene_tx_df["CDS_position"].unique().to_list())
 
         # Iterate over unique cancer types
         for cancer in per_cancer_patient_total.keys():
-            subset = gene_df.filter(pl.col("CANCER_TYPE") == cancer)
+            subset = gene_tx_df.filter(pl.col("CANCER_TYPE") == cancer)
 
             # Map CDS_position to downstream patient counts
             rows = []
@@ -383,6 +409,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
             result_df = pl.DataFrame(rows).with_columns(
                 [
                     pl.lit(gene).alias("Hugo_Symbol"),
+                    pl.lit(transcript).alias("Transcript_ID"),
                     pl.lit(cancer).alias("CANCER_TYPE"),
                 ]
             )
@@ -395,6 +422,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
         else pl.DataFrame(
             {
                 "Hugo_Symbol": [],
+                "Transcript_ID": [],
                 "CANCER_TYPE": [],
                 "CDS_position": [],
                 "downstream_patient_count": [],
@@ -405,7 +433,7 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
     # Pivot so each cancer type becomes a column
     pivoted = combined.pivot(
         values="downstream_patient_count",
-        index=["Hugo_Symbol", "CDS_position"],
+        index=["Hugo_Symbol", "Transcript_ID", "CDS_position"],
         on="CANCER_TYPE",
         aggregate_function="first",
     ).fill_null(0)
@@ -423,104 +451,76 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
     return pivoted
 
 
-def add_deletion_positions(inframe_deletions: pl.DataFrame) -> pl.DataFrame:
+def add_deletion_positions(
+    inframe_deletions: pl.DataFrame,
+    source: str,
+) -> pl.DataFrame:
     """
     Add start and end positions as new columns to the inframe deletions
-    DataFrame.
+    DataFrame based on HGVSp column.
 
     Examples
     --------
+    HGVSc:
     'ENST00000269305.4:c.480_485del'    -> (480, 485)
     'ENST00000296930.5:c.511_524+1del'  -> (511, 524)
     'ENST00000269305.4:c.480del'        -> (480, 480)
+    HGVSp:
+    'p.Met160_Ala161del'        -> (160, 161)
+    'p.Glu453del'               -> (453, 453)
+    'p.Met237_Cys242delinsIle'  -> (237, 242)
+    'p.Trp557_Val559delinsCys'  -> (557, 559)
 
     Parameters
     ----------
     inframe_deletions : pl.DataFrame
-        DataFrame containing inframe deletions with HGVSc column
+        DataFrame containing inframe deletions and the positions of the deletion
+    source: str
+        Source of the data, either 'HGVSc' or 'HGVSp'
 
     Returns
     -------
     pl.DataFrame
         DataFrame with additional columns for deletion start and end
     """
-    return inframe_deletions.with_columns(
+    if source == "HGVSc":
+        pattern = r"c\.(\d+)[+-]?\d*_?(\d+)?[+-]?\d*del"
+    elif source == "HGVSp":
+        pattern = (
+            r"p\.[A-Za-z]{3}(\d+)(?:_[A-Za-z]{3}(\d+))?del(?:ins[A-Za-z]+)?"
+        )
+    else:
+        raise ValueError("source must be 'HGVSc' or 'HGVSp'")
+
+    df = inframe_deletions.with_columns(
         [
-            pl.col("HGVSc")
-            .str.extract(r"c\.(\d+)[+-]?\d*_?(\d+)?[+-]?\d*del", group_index=1)
+            pl.col(source)
+            .str.extract(pattern, 1)
             .cast(pl.Int64)
             .alias("del_start"),
-            pl.col("HGVSc")
-            .str.extract(r"c\.(\d+)[+-]?\d*_?(\d+)?[+-]?\d*del", group_index=2)
+            pl.col(source)
+            .str.extract(pattern, 2)
             .cast(pl.Int64)
             .alias("del_end"),
         ]
-    ).with_columns(
-        # Fill missing del_end with del_start (if it's deletion at one pos)
+    )
+
+    # Fill missing del_end with del_start for single-position deletions
+    df = df.with_columns(
         pl.when(pl.col("del_end").is_null())
         .then(pl.col("del_start"))
         .otherwise(pl.col("del_end"))
         .alias("del_end")
     )
 
-
-def count_patients_with_nested_deletions(
-    gene_group: pl.DataFrame,
-) -> pl.DataFrame:
-    """
-    Count how many unique patients have deletions that are the same positions
-    or nested within the deletion in the same gene.
-
-    Parameters
-    ----------
-    gene_group : pl.DataFrame
-        DataFrame containing deletions for a single gene (and optionally a cancer type)
-
-    Returns
-    -------
-    pl.DataFrame
-        DataFrame with del_start, del_end, and nested_patient_count
-    """
-    # Keep only unique deletion ranges
-    unique_ranges = (
-        gene_group.select(["del_start", "del_end"])
-        .unique()
-        .sort(["del_start", "del_end"])
-    )
-
-    results = []
-
-    # For each unique range, find all patients with deletions nested within it
-    for row in unique_ranges.iter_rows(named=True):
-        ref_start = row["del_start"]
-        ref_end = row["del_end"]
-
-        # Find all deletions nested within this range
-        nested_patients = (
-            gene_group.filter(
-                (pl.col("del_start") >= ref_start)
-                & (pl.col("del_end") <= ref_end)
-            )
-            .select("PATIENT_ID")
-            .unique()
-            .height
-        )
-
-        results.append(
-            {
-                "del_start": ref_start,
-                "del_end": ref_end,
-                "nested_patient_count": nested_patients,
-            }
-        )
-
-    return pl.DataFrame(results)
+    return df
 
 
 def count_nested_inframe_deletions(
     inframe_deletions_df: pl.DataFrame,
     cancer_count_type: str,
     patient_total: int,
+    position_method: str,
     inframe_deletions: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """
@@ -530,77 +530,118 @@ def count_nested_inframe_deletions(
     Parameters
     ----------
     inframe_deletions_df : pl.DataFrame
-        DataFrame containing inframe deletions
+        DataFrame containing a set of inframe deletions
     cancer_count_type : str
         The cancer count type, to include in name of the column
     patient_total : int
         Total number of unique patients in the dataset
+    inframe_deletions: pl.DataFrame | None
+        Reference dataset to ensure all inframe deletions are included
+    position_method : str
+        Method used to determine deletion positions, "CDS" or "AA"
 
     Returns
     -------
     pl.DataFrame
         DataFrame with counts of matching or nested inframe deletions.
     """
-    genes = inframe_deletions_df["Hugo_Symbol"].unique().to_list()
+    all_results = []
 
-    results = []
-    for gene in genes:
-        gene_data = inframe_deletions_df.filter(pl.col("Hugo_Symbol") == gene)
-        nested_counts_df = count_patients_with_nested_deletions(gene_data)
-
-        nested_counts_df = nested_counts_df.with_columns(
-            pl.lit(gene).alias("Hugo_Symbol")
+    # Iterate over (gene, transcript) pairs
+    for gene, transcript in (
+        inframe_deletions_df.select(["Hugo_Symbol", "Transcript_ID"])
+        .unique()
+        .iter_rows()
+    ):
+        subset = inframe_deletions_df.filter(
+            (pl.col("Hugo_Symbol") == gene)
+            & (pl.col("Transcript_ID") == transcript)
         )
 
-        results.append(nested_counts_df)
+        unique_ranges = (
+            subset.select(
+                ["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"]
+            )
+            .unique()
+            .sort(["del_start", "del_end"])
+        )
 
-    # Concatenate all genes
+        # Get nested patient counts for each unique deletion range
+        rows = []
+        for del_start, del_end in unique_ranges.select(
+            ["del_start", "del_end"]
+        ).iter_rows():
+            nested_patients = (
+                subset.filter(
+                    (pl.col("del_start") >= del_start)
+                    & (pl.col("del_end") <= del_end)
+                )
+                .select("PATIENT_ID")
+                .unique()
+                .to_series()
+                .to_list()
+            )
+            rows.append(
+                {
+                    "Hugo_Symbol": gene,
+                    "Transcript_ID": transcript,
+                    "del_start": del_start,
+                    "del_end": del_end,
+                    "nested_patient_count": len(nested_patients),
+                }
+            )
+
+        all_results.append(pl.DataFrame(rows))
+
+    # Combine all results
     inframe_counts = (
-        pl.concat(results, how="vertical")
-        if results
+        pl.concat(all_results, how="vertical")
+        if all_results
         else pl.DataFrame(
             {
                 "Hugo_Symbol": [],
+                "Transcript_ID": [],
                 "del_start": [],
                 "del_end": [],
                 "nested_patient_count": [],
-            },
-            schema={
-                "Hugo_Symbol": pl.Utf8,
-                "del_start": pl.Int64,
-                "del_end": pl.Int64,
-                "nested_patient_count": pl.Int64,
-            },
+            }
         )
     )
 
-    # Rename the count column
-    new_col_name = f"NestedInframeDeletionsPerCDS.{cancer_count_type}_Count_N_{patient_total}"
-    inframe_counts = inframe_counts.rename(
-        {"nested_patient_count": new_col_name}
-    )
-    # If this is a grouped (e.g. haemonc cancer) count, then all in frame dels
-    #  should have a count, so add 0 if not present in grouped count
+    # Rename nested count column with cohort info
+    col_name = f"NestedInframeDeletionsPer{position_method}.{cancer_count_type}_Count_N_{patient_total}"
+    inframe_counts = inframe_counts.rename({"nested_patient_count": col_name})
+
+    # If given, join back to reference deletions to ensure all rows are present
     if inframe_deletions is not None:
         result = (
             inframe_deletions.select(
-                ["Hugo_Symbol", "grch38_description", "del_start", "del_end"]
+                [
+                    "Hugo_Symbol",
+                    "grch38_description",
+                    "Transcript_ID",
+                    "del_start",
+                    "del_end",
+                ]
             )
             .unique()
             .join(
                 inframe_counts,
-                on=["Hugo_Symbol", "del_start", "del_end"],
+                on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
                 how="left",
             )
-            .with_columns(pl.col(new_col_name).fill_null(0))
-        )
+            .with_columns(pl.col(col_name).fill_null(0))
+        ).drop("Hugo_Symbol", "Transcript_ID", "del_start", "del_end")
+
         return result
 
     return inframe_counts
 
 
 def count_nested_inframe_deletions_per_cancer_type(
-    inframe_deletions_df: pl.DataFrame, per_cancer_patient_total: dict
+    inframe_deletions_df: pl.DataFrame,
+    per_cancer_patient_total: dict,
+    position_method: str,
 ) -> pl.DataFrame:
     """
     Count the number of unique patients with inframe deletions that are either
@@ -612,68 +653,85 @@ def count_nested_inframe_deletions_per_cancer_type(
         DataFrame containing inframe deletions with patient information.
     per_cancer_patient_total : dict
         Total number of unique patients in the dataset per cancer type.
+    position_method : str
+        Method used to determine deletion positions, "CDS" or "AA".
 
     Returns
     -------
     pl.DataFrame
         DataFrame with counts of matching or nested inframe deletions per cancer type.
     """
-    unique_ranges = (
-        inframe_deletions_df.select(["Hugo_Symbol", "del_start", "del_end"])
-        .unique()
-        .sort(["Hugo_Symbol", "del_start", "del_end"])
-    )
-
     all_results = []
 
-    # For each unique deletion, count nested patients per cancer type
-    for row in unique_ranges.iter_rows(named=True):
-        hugo = row["Hugo_Symbol"]
-        start = row["del_start"]
-        end = row["del_end"]
-
-        # Get all deletions for this gene
-        gene_subset = inframe_deletions_df.filter(
-            pl.col("Hugo_Symbol") == hugo
+    # Iterate over unique (gene, transcript) pairs
+    for gene, transcript in (
+        inframe_deletions_df.select(["Hugo_Symbol", "Transcript_ID"])
+        .unique()
+        .iter_rows()
+    ):
+        subset_gene_tx = inframe_deletions_df.filter(
+            (pl.col("Hugo_Symbol") == gene)
+            & (pl.col("Transcript_ID") == transcript)
         )
 
-        # Find nested deletions across all patients/cancer types
-        nested_subset = gene_subset.filter(
-            (pl.col("del_start") >= start) & (pl.col("del_end") <= end)
+        # Get unique deletion ranges for this transcript
+        unique_ranges = (
+            subset_gene_tx.select(["del_start", "del_end"])
+            .unique()
+            .sort(["del_start", "del_end"])
         )
 
-        # Count unique patients per cancer type
-        nested_counts_per_cancer = nested_subset.group_by("CANCER_TYPE").agg(
-            pl.col("PATIENT_ID").n_unique().alias("nested_patient_count")
-        )
+        # Iterate over cancer types
+        for cancer in per_cancer_patient_total.keys():
+            subset_cancer = subset_gene_tx.filter(
+                pl.col("CANCER_TYPE") == cancer
+            )
 
-        # Include 0 for cancer types with no nested patients
-        all_cancers_df = pl.DataFrame(
-            {"CANCER_TYPE": list(per_cancer_patient_total.keys())}
-        )
-        nested_counts_per_cancer = all_cancers_df.join(
-            nested_counts_per_cancer, on="CANCER_TYPE", how="left"
-        ).with_columns(
-            pl.col("nested_patient_count").fill_null(0).cast(pl.Int64)
-        )
+            rows = []
+            for del_start, del_end in unique_ranges.iter_rows():
+                nested_patients = (
+                    subset_cancer.filter(
+                        (pl.col("del_start") >= del_start)
+                        & (pl.col("del_end") <= del_end)
+                    )
+                    .select("PATIENT_ID")
+                    .unique()
+                    .to_series()
+                    .to_list()
+                )
+                rows.append(
+                    {
+                        "Hugo_Symbol": gene,
+                        "Transcript_ID": transcript,
+                        "CANCER_TYPE": cancer,
+                        "del_start": del_start,
+                        "del_end": del_end,
+                        "nested_patient_count": len(nested_patients),
+                    }
+                )
 
-        # Add deletion info
-        nested_counts_per_cancer = nested_counts_per_cancer.with_columns(
-            [
-                pl.lit(hugo).alias("Hugo_Symbol"),
-                pl.lit(start).alias("del_start"),
-                pl.lit(end).alias("del_end"),
-            ]
-        )
-
-        all_results.append(nested_counts_per_cancer)
+            if rows:
+                all_results.append(pl.DataFrame(rows))
 
     # Combine all results
-    nested_counts_df = pl.concat(all_results, how="vertical")
+    nested_counts_df = (
+        pl.concat(all_results, how="vertical")
+        if all_results
+        else pl.DataFrame(
+            {
+                "Hugo_Symbol": [],
+                "Transcript_ID": [],
+                "del_start": [],
+                "del_end": [],
+                "CANCER_TYPE": [],
+                "nested_patient_count": [],
+            }
+        )
+    )
 
-    # Pivot table: each row = gene/CDS position, each column = cancer type
+    # Pivot cancer types into columns
     pivot_df = nested_counts_df.pivot(
-        index=["Hugo_Symbol", "del_start", "del_end"],
+        index=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
         on="CANCER_TYPE",
         values="nested_patient_count",
         aggregate_function="first",
@@ -682,20 +740,12 @@ def count_nested_inframe_deletions_per_cancer_type(
     # Rename columns to include patient totals
     column_mapping = {
         col: (
-            f"NestedInframeDeletionsPerCDS.{col}_Count_N_{per_cancer_patient_total[col]}"
+            f"NestedInframeDeletionsPer{position_method}.{col}_Count_N_{per_cancer_patient_total[col]}"
         )
         for col in per_cancer_patient_total.keys()
         if col in pivot_df.columns
     }
-
-    pivot_df = pivot_df.rename(column_mapping)
-    pivot_df = pivot_df.with_columns(
-        [
-            pl.col(col).cast(pl.Int64)
-            for col in pivot_df.columns
-            if col
-            not in ["Hugo_Symbol"]  # cast del_start, del_end, and counts
-        ]
-    )
+    if column_mapping:
+        pivot_df = pivot_df.rename(column_mapping)
 
     return pivot_df
