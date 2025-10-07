@@ -164,7 +164,9 @@ def main():
         f"{datetime.now().replace(microsecond=0)} Generating amino acid counts"
     )
     amino_acid_change_counts_all_cancer = count_amino_acid_change(
-        df=genie_data.select("Hugo_Symbol", "HGVSp", "PATIENT_ID"),
+        df=genie_data.select(
+            "Hugo_Symbol", "HGVSp", "Transcript_ID", "PATIENT_ID"
+        ),
         unique_patient_total=patient_total,
         count_type="All_Cancers",
     )
@@ -172,7 +174,11 @@ def main():
     amino_acid_change_counts_per_cancer = (
         count_amino_acid_change_per_cancer_type(
             df=genie_data.select(
-                "Hugo_Symbol", "HGVSp", "PATIENT_ID", "CANCER_TYPE"
+                "Hugo_Symbol",
+                "HGVSp",
+                "PATIENT_ID",
+                "Transcript_ID",
+                "CANCER_TYPE",
             ),
             unique_patients_per_cancer=per_cancer_patient_total,
         )
@@ -180,7 +186,7 @@ def main():
 
     merged_aa_counts = amino_acid_change_counts_all_cancer.join(
         amino_acid_change_counts_per_cancer,
-        on=["Hugo_Symbol", "HGVSp"],
+        on=["Hugo_Symbol", "HGVSp", "Transcript_ID"],
         how="left",
     )
 
@@ -248,7 +254,7 @@ def main():
 
     one_row_per_variant_agg = one_row_per_variant_agg.join(
         merged_aa_counts,
-        on=["Hugo_Symbol", "HGVSp"],
+        on=["Hugo_Symbol", "HGVSp", "Transcript_ID"],
         how="left",
     )
 

@@ -142,7 +142,7 @@ def count_amino_acid_change(
     # Group by gene + amino acid change and count unique patients
     amino_acid_change_counts = (
         df.filter(pl.col("HGVSp").is_not_null())
-        .group_by(["Hugo_Symbol", "HGVSp"])
+        .group_by(["Hugo_Symbol", "Transcript_ID", "HGVSp"])
         .agg(pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col))
     )
 
@@ -151,15 +151,17 @@ def count_amino_acid_change(
     if all_variants_df is not None:
         result = (
             all_variants_df.filter(pl.col("HGVSp").is_not_null())
-            .select(["grch38_description", "Hugo_Symbol", "HGVSp"])
+            .select(
+                ["grch38_description", "Hugo_Symbol", "Transcript_ID", "HGVSp"]
+            )
             .unique()
             .join(
                 amino_acid_change_counts,
-                on=["Hugo_Symbol", "HGVSp"],
+                on=["Hugo_Symbol", "Transcript_ID", "HGVSp"],
                 how="left",
             )
             .with_columns(pl.col(count_col).fill_null(0))
-        ).drop("Hugo_Symbol", "HGVSp")
+        ).drop(["Hugo_Symbol", "Transcript_ID", "HGVSp"])
         return result
 
     return amino_acid_change_counts
@@ -190,7 +192,7 @@ def count_amino_acid_change_per_cancer_type(
     # Count how many patients have same amino acid change for each cancer type
     amino_acid_count_per_present_cancer = (
         df.filter(pl.col("HGVSp").is_not_null())
-        .group_by(["Hugo_Symbol", "HGVSp", "CANCER_TYPE"])
+        .group_by(["Hugo_Symbol", "HGVSp", "Transcript_ID", "CANCER_TYPE"])
         .agg(
             pl.col("PATIENT_ID")
             .n_unique()
@@ -202,7 +204,7 @@ def count_amino_acid_change_per_cancer_type(
     # Pivot so all cancer types have counts
     aa_per_cancer_counts = amino_acid_count_per_present_cancer.pivot(
         values="patient_count",
-        index=["Hugo_Symbol", "HGVSp"],
+        index=["Hugo_Symbol", "HGVSp", "Transcript_ID"],
         on="CANCER_TYPE",
         aggregate_function="first",
     ).fill_null(0)
@@ -211,7 +213,7 @@ def count_amino_acid_change_per_cancer_type(
     present = [
         c
         for c in aa_per_cancer_counts.columns
-        if c not in ["Hugo_Symbol", "HGVSp"]
+        if c not in ["Hugo_Symbol", "HGVSp", "Transcript_ID"]
     ]
     missing = set(present) - set(unique_patients_per_cancer)
     if missing:
@@ -220,7 +222,7 @@ def count_amino_acid_change_per_cancer_type(
         )
     new_columns = []
     for col in aa_per_cancer_counts.columns:
-        if col in ["Hugo_Symbol", "HGVSp"]:
+        if col in ["Hugo_Symbol", "HGVSp", "Transcript_ID"]:
             new_columns.append(col)
         else:
             new_columns.append(

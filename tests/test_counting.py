@@ -210,7 +210,7 @@ class TestCountNucleotideChangeHaemoncCancers:
 
 
 class TestCountAminoAcidChangeAllCancers:
-    def test_count_amino_acid_change_all_cancers_when_amino_acid_same(self):
+    def test_count_amino_acid_change_all_cancers_when_transcript_same(self):
         df = pl.from_dict(
             {
                 "grch38_description": [
@@ -243,6 +243,7 @@ class TestCountAminoAcidChangeAllCancers:
                     "GENE3",
                     "GENE4",
                 ],
+                "Transcript_ID": ["ENST00000367770"] * 8,
                 "HGVSp": [
                     "p.Ala100Thr",
                     "p.Ala100Thr",
@@ -269,7 +270,106 @@ class TestCountAminoAcidChangeAllCancers:
                     "p.Gly200Cys",
                     "p.Arg400Gln",
                 ],
+                "Transcript_ID": ["ENST00000367770"] * 4,
                 "SameAminoAcidChange.All_Cancers_Count_N_16000": [1, 2, 1, 2],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+    def test_count_amino_acid_change_all_cancers_when_transcript_different(
+        self,
+    ):
+        df = pl.from_dict(
+            {
+                "grch38_description": [
+                    "1_100_A_T",
+                    "1_100_A_T",
+                    "1_200_G_C",
+                    "1_200_G_C",
+                    "4_101_T_G",
+                    "10_100_A_C",
+                    "10_101_G_T",
+                    "10_102_T_A",
+                    "11_500_A_C",
+                ],
+                "PATIENT_ID": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_3",
+                    "patient_4",
+                    "patient_1",
+                    "patient_7",
+                    "patient_8",
+                    "patient_9",
+                ],
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE2",
+                    "GENE3",
+                    "GENE3",
+                    "GENE3",
+                    "GENE4",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript3",
+                    "Transcript4",
+                    "Transcript4",
+                ],
+                "HGVSp": [
+                    "p.Ala100Thr",
+                    "p.Ala100Thr",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Arg400Gln",
+                    "p.Arg400Gln",
+                    "p.Arg400Gln",
+                    None,
+                ],
+            }
+        )
+
+        result = utils.counting.count_amino_acid_change(
+            df, 16000, "All_Cancers"
+        )
+
+        expected = pl.from_dict(
+            {
+                "Hugo_Symbol": ["GENE1", "GENE1", "GENE2", "GENE3", "GENE3"],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript4",
+                ],
+                "HGVSp": [
+                    "p.Ala100Thr",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Arg400Gln",
+                    "p.Arg400Gln",
+                ],
+                "SameAminoAcidChange.All_Cancers_Count_N_16000": [
+                    1,
+                    2,
+                    1,
+                    2,
+                    1,
+                ],
             }
         )
 
@@ -279,7 +379,9 @@ class TestCountAminoAcidChangeAllCancers:
 
 
 class TestCountAminoAcidChangePerCancerType:
-    def test_count_amino_acid_change_per_cancer_type(self):
+    def test_count_amino_acid_change_per_cancer_type_one_transcript_per_gene(
+        self,
+    ):
         df = pl.from_dict(
             {
                 "grch38_description": [
@@ -322,6 +424,16 @@ class TestCountAminoAcidChangePerCancerType:
                     "GENE3",
                     "GENE4",
                 ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript3",
+                    "Transcript4",
+                ],
                 "HGVSp": [
                     "p.Ala100Thr",
                     "p.Ala100Thr",
@@ -355,6 +467,12 @@ class TestCountAminoAcidChangePerCancerType:
                     "p.Gly200Cys",
                     "p.Arg400Gln",
                 ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                ],
                 "SameAminoAcidChange.Cancer 1_Count_N_500": [
                     1,
                     0,
@@ -364,6 +482,119 @@ class TestCountAminoAcidChangePerCancerType:
                 "SameAminoAcidChange.Cancer 2_Count_N_4": [0, 1, 0, 1],
                 "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1, 0, 0],
                 "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 0, 1, 0],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+    def test_count_amino_acid_change_per_cancer_type_multiple_txs_per_gene(
+        self,
+    ):
+        df = pl.from_dict(
+            {
+                "grch38_description": [
+                    "1_100_A_T",
+                    "1_100_A_T",
+                    "1_200_G_C",
+                    "1_200_G_C",
+                    "4_101_T_G",
+                    "10_100_A_C",
+                    "10_101_G_T",
+                    "10_102_T_A",
+                    "11_500_A_C",
+                ],
+                "PATIENT_ID": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_3",
+                    "patient_4",
+                    "patient_1",
+                    "patient_7",
+                    "patient_8",
+                    "patient_9",
+                ],
+                "CANCER_TYPE": [
+                    "Cancer 1",
+                    "Cancer 1",
+                    "Cancer 2",
+                    "Cancer 3",
+                    "Cancer 4",
+                    "Cancer 1",
+                    "Cancer 2",
+                    "Cancer 2",
+                    "Cancer 3",
+                ],
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE2",
+                    "GENE3",
+                    "GENE3",
+                    "GENE3",
+                    "GENE4",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript3",
+                    "Transcript4",
+                    "Transcript5",
+                ],
+                "HGVSp": [
+                    "p.Ala100Thr",
+                    "p.Ala100Thr",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Arg400Gln",
+                    "p.Arg400Gln",
+                    "p.Arg400Gln",
+                    None,
+                ],
+            }
+        )
+
+        unique_patients_per_cancer = {
+            "Cancer 1": 500,
+            "Cancer 2": 4,
+            "Cancer 3": 3,
+            "Cancer 4": 50,
+        }
+
+        result = utils.counting.count_amino_acid_change_per_cancer_type(
+            df, unique_patients_per_cancer
+        )
+
+        expected = pl.from_dict(
+            {
+                "Hugo_Symbol": ["GENE1", "GENE1", "GENE2", "GENE3", "GENE3"],
+                "HGVSp": [
+                    "p.Ala100Thr",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Arg400Gln",
+                    "p.Arg400Gln",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript4",
+                ],
+                "SameAminoAcidChange.Cancer 1_Count_N_500": [1, 0, 0, 1, 0],
+                "SameAminoAcidChange.Cancer 2_Count_N_4": [0, 1, 0, 1, 1],
+                "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1, 0, 0, 0],
+                "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 0, 1, 0, 0],
             }
         )
 
@@ -389,6 +620,13 @@ class TestCountAminoAcidChangeHaemoncCancers:
                     "GENE2",
                     "GENE2",
                     "GENE3",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                    "Transcript3",
                 ],
                 "HGVSp": [
                     "p.Ala100Thr",
@@ -431,6 +669,14 @@ class TestCountAminoAcidChangeHaemoncCancers:
                     "GENE2",
                     "GENE3",
                     "GENE4",
+                ],
+                "Transcript_ID": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript2",
+                    "Transcript2",
+                    "Transcript3",
+                    "Transcript4",
                 ],
                 "HGVSp": [
                     "p.Ala100Thr",
