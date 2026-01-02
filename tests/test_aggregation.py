@@ -98,26 +98,20 @@ class TestGetTruncatingVariants:
                     "var4",
                 ],
                 "Hugo_Symbol": ["TP53", "BRCA1", "EGFR", "PTEN"],
-                "Transcript_ID": ["tx1", "tx2", "tx3", "tx4"],
+                "RefSeq": ["tx1", "tx2", "tx3", "tx4"],
                 "PATIENT_ID": [1, 2, 3, 4],
                 "CANCER_TYPE": ["Lung", "Breast", "Colon", "Prostate"],
-                "Variant_Classification": [
-                    "Frame_Shift_Del",
-                    "Frame_Shift_Ins",
-                    "Nonsense_Mutation",
-                    "Missense_Mutation",
-                ],
-                "HGVSc": [
-                    "c.67del",
-                    "c.149dup",
-                    "c.298C>T",
-                    "c.300G>C",
-                ],
                 "HGVSp": [
                     "p.Trp23Ter",
                     "p.Arg50Ter",
                     "p.StopTer",
                     "p.Arg100Gly",
+                ],
+                "Consequence": [
+                    "frameshift_variant",
+                    "frameshift_variant",
+                    "stop_gained",
+                    "missense_variant",
                 ],
             }
         )
@@ -128,10 +122,19 @@ class TestGetTruncatingVariants:
             {
                 "grch38_description": ["var1", "var2", "var3"],
                 "Hugo_Symbol": ["TP53", "BRCA1", "EGFR"],
-                "Transcript_ID": ["tx1", "tx2", "tx3"],
+                "RefSeq": ["tx1", "tx2", "tx3"],
                 "PATIENT_ID": [1, 2, 3],
                 "CANCER_TYPE": ["Lung", "Breast", "Colon"],
-                "HGVSc": ["c.67del", "c.149dup", "c.298C>T"],
+                "HGVSp": [
+                    "p.Trp23Ter",
+                    "p.Arg50Ter",
+                    "p.StopTer",
+                ],
+                "Consequence": [
+                    "frameshift_variant",
+                    "frameshift_variant",
+                    "stop_gained",
+                ],
             }
         )
 
@@ -141,7 +144,7 @@ class TestGetTruncatingVariants:
 
 
 class TestGetInframeDeletions:
-    def test_get_inframe_deletions_filters_correctly_hgvsc(self):
+    def test_get_inframe_deletions_filters_correctly(self):
         df = pl.DataFrame(
             {
                 "grch38_description": [
@@ -150,63 +153,27 @@ class TestGetInframeDeletions:
                     "var3",
                 ],
                 "Hugo_Symbol": ["TP53", "BRCA1", "EGFR"],
-                "Transcript_ID": ["tx1", "tx2", "tx3"],
+                "RefSeq": ["tx1", "tx2", "tx3"],
                 "PATIENT_ID": [1, 2, 3],
                 "CANCER_TYPE": ["Lung", "Breast", "Colon"],
-                "Variant_Classification": [
-                    "In_Frame_Del",
-                    "In_Frame_Del",
-                    "Missense_Mutation",
+                "Protein_position": ["41", None, "42"],
+                "Consequence": [
+                    "inframe_deletion",
+                    "inframe_deletion",
+                    "synonymous_variant",
                 ],
-                "HGVSc": ["c.123del", None, "c.456A>T"],
             }
         )
-        result = get_inframe_deletions(df, column_used="HGVSc")
+        result = get_inframe_deletions(df)
 
         expected = pl.DataFrame(
             {
                 "grch38_description": ["var1"],
                 "Hugo_Symbol": ["TP53"],
-                "Transcript_ID": ["tx1"],
+                "RefSeq": ["tx1"],
                 "PATIENT_ID": [1],
                 "CANCER_TYPE": ["Lung"],
-                "HGVSc": ["c.123del"],
-            }
-        )
-        assert_frame_equal(
-            result, expected, check_column_order=False, check_row_order=False
-        )
-
-    def test_get_inframe_deletions_filters_correctly_hgvsp(self):
-        df = pl.DataFrame(
-            {
-                "grch38_description": [
-                    "var1",
-                    "var2",
-                    "var3",
-                ],
-                "Hugo_Symbol": ["TP53", "BRCA1", "EGFR"],
-                "Transcript_ID": ["tx1", "tx2", "tx3"],
-                "PATIENT_ID": [1, 2, 3],
-                "CANCER_TYPE": ["Lung", "Breast", "Colon"],
-                "Variant_Classification": [
-                    "In_Frame_Del",
-                    "In_Frame_Del",
-                    "Missense_Mutation",
-                ],
-                "HGVSp": ["p.His42dup", None, "p.His41_His42dup"],
-            }
-        )
-        result = get_inframe_deletions(df, column_used="HGVSp")
-
-        expected = pl.DataFrame(
-            {
-                "grch38_description": ["var1"],
-                "Hugo_Symbol": ["TP53"],
-                "Transcript_ID": ["tx1"],
-                "PATIENT_ID": [1],
-                "CANCER_TYPE": ["Lung"],
-                "HGVSp": ["p.His42dup"],
+                "Protein_position": ["41"],
             }
         )
         assert_frame_equal(

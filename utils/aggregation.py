@@ -93,7 +93,10 @@ def create_df_with_one_row_per_variant(
     """
     aggregated_df = df.group_by("grch38_description").agg(
         [
-            pl.col(c).unique().sort().str.join("&").alias(c)
+            pl.when(pl.col(c).drop_nulls().len() == 0)
+            .then(None)
+            .otherwise(pl.col(c).drop_nulls().unique().sort().str.join("&"))
+            .alias(c)
             for c in columns_to_aggregate
         ]
     )
@@ -103,12 +106,14 @@ def create_df_with_one_row_per_variant(
 
 def get_truncating_variants(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Extract rows of truncating variants from the Genie data.
+    Extract rows of truncating variants from the GENIE data. This takes
+    any which have "Ter" (but not "ext") in the HGVSp notation and have
+    a Consequence which includes "stop_gained" or "frameshift_variant".
 
     Parameters
     ----------
     df : pl.DataFrame
-        Input Genie MAF data
+        Input GENIE MAF data
 
     Returns
     -------
@@ -116,55 +121,72 @@ def get_truncating_variants(df: pl.DataFrame) -> pl.DataFrame:
         DataFrame with truncating variants
     """
     truncating = df.filter(
-        (
-            pl.col("Variant_Classification").is_in(
-                [
-                    "Frame_Shift_Del",
-                    "Frame_Shift_Ins",
-                    "Nonsense_Mutation",
-                ]
-            )
+        pl.col("HGVSp").str.contains("Ter", literal=False)
+        & ~pl.col("HGVSp").str.contains("ext", literal=False)
+        & pl.col("Consequence").str.contains(
+            "stop_gained|frameshift_variant", literal=False
         )
-        & (pl.col("HGVSp").str.contains("Ter", literal=True, strict=False))
-    ).select(
-        "Hugo_Symbol",
-        "grch38_description",
-        "Transcript_ID",
-        "HGVSc",
-        "PATIENT_ID",
-        "CANCER_TYPE",
     )
+
     return truncating
 
 
-def get_inframe_deletions(df: pl.DataFrame, column_used: str) -> pl.DataFrame:
+def add_protein_position_start(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Get inframe deletions from the Polars DataFrame
+    Extract the first number from the protein position, as some are formatted
+    e.g. 221-222 and we are using the first position to determine other
+    variants which are downstream.
 
     Parameters
     ----------
     df : pl.DataFrame
-        DataFrame containing the Genie data
-    column_used : str
-        Column to check for non-null values, either 'HGVSc' or 'HGVSp'
+        dataframe with Protein_position to extract start position from
 
     Returns
     -------
     pl.DataFrame
-        DataFrame with inframe deletion variants
+        dataframe with new column Protein_position_start
     """
-    inframe_deletions = (
-        df.filter(pl.col("Variant_Classification") == "In_Frame_Del").filter(
-            pl.col(column_used).is_not_null()
-        )
-    ).select(
+    truncating_variants = df.with_columns(
+        pl.col("Protein_position")
+        .cast(pl.Utf8)
+        .str.extract(r"^(\d+)", 1)
+        .cast(pl.Int64)
+        .alias("Protein_position_start")
+    )
+
+    return truncating_variants
+
+
+def get_inframe_deletions(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Extract rows of inframe deletion variants from the GENIE data. This takes
+    any which have a Consequence which includes "inframe_deletion".
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        GENIE dataset
+
+    Returns
+    -------
+    pl.DataFrame
+        dataframe of inframe deletions
+    """
+    columns_to_select = [
         "grch38_description",
         "Hugo_Symbol",
-        "Transcript_ID",
-        column_used,
+        "RefSeq",
+        "Protein_position",
         "PATIENT_ID",
         "CANCER_TYPE",
-    )
+    ]
+
+    inframe_deletions = df.filter(
+        pl.col("Consequence").str.contains("inframe_deletion")
+        & pl.col("Protein_position").is_not_null()
+    ).select(columns_to_select)
+
     return inframe_deletions
 
 
