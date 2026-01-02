@@ -87,33 +87,6 @@ def remove_disallowed_chars_from_columns(genie_data):
     return genie_data
 
 
-def camel_case_to_spaces(text):
-    """
-    Replace camel case in a string with spaces, while preserving 'CDS' as a whole word
-
-    Parameters
-    ----------
-    text : str
-        Input string with camel case
-
-    Returns
-    -------
-    str
-        String with spaces instead of camel case
-    """
-    # Protect 'CDS' with a placeholder
-    text = text.replace("CDS", "___cds___")
-
-    # Insert spaces between camel case words
-    text = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", text)
-
-    # Restore 'CDS' and ensure space before it
-    text = text.replace("___cds___", "CDS")
-    text = re.sub(r"(?<! )CDS", r" CDS", text)
-
-    return text
-
-
 def generate_info_field_header_info(genie_counts):
     """
     Generate INFO field headers for the VCF file based on the genie_counts DataFrame
@@ -138,8 +111,8 @@ def generate_info_field_header_info(genie_counts):
             if len(parts) < 2:
                 print("Skipping malformed column:", column)
                 continue
-            count_type_description = camel_case_to_spaces(parts[0])
-            cancer_type_description = camel_case_to_spaces(parts[1])
+            count_type_description = parts[0]
+            cancer_type_description = parts[1]
             info_fields.append(
                 {
                     "id": column,

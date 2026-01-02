@@ -126,6 +126,13 @@ def get_truncating_variants(df: pl.DataFrame) -> pl.DataFrame:
         & pl.col("Consequence").str.contains(
             "stop_gained|frameshift_variant", literal=False
         )
+    ).select(
+        "Hugo_Symbol",
+        "grch38_description",
+        "RefSeq",
+        "Protein_position",
+        "PATIENT_ID",
+        "CANCER_TYPE",
     )
 
     return truncating

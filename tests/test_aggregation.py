@@ -107,6 +107,7 @@ class TestGetTruncatingVariants:
                     "p.StopTer",
                     "p.Arg100Gly",
                 ],
+                "Protein_position": ["23", "50", "20", "100"],
                 "Consequence": [
                     "frameshift_variant",
                     "frameshift_variant",
@@ -125,16 +126,7 @@ class TestGetTruncatingVariants:
                 "RefSeq": ["tx1", "tx2", "tx3"],
                 "PATIENT_ID": [1, 2, 3],
                 "CANCER_TYPE": ["Lung", "Breast", "Colon"],
-                "HGVSp": [
-                    "p.Trp23Ter",
-                    "p.Arg50Ter",
-                    "p.StopTer",
-                ],
-                "Consequence": [
-                    "frameshift_variant",
-                    "frameshift_variant",
-                    "stop_gained",
-                ],
+                "Protein_position": ["23", "50", "20"],
             }
         )
 
