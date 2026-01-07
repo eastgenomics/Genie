@@ -243,7 +243,7 @@ class TestCountAminoAcidChangeAllCancers:
                     "GENE3",
                     "GENE4",
                 ],
-                "Transcript_ID": ["ENST00000367770"] * 8,
+                "RefSeq": ["ENST00000367770"] * 8,
                 "HGVSp": [
                     "p.Ala100Thr",
                     "p.Ala100Thr",
@@ -270,7 +270,7 @@ class TestCountAminoAcidChangeAllCancers:
                     "p.Gly200Cys",
                     "p.Arg400Gln",
                 ],
-                "Transcript_ID": ["ENST00000367770"] * 4,
+                "RefSeq": ["ENST00000367770"] * 4,
                 "SameAminoAcidChange.All_Cancers_Count_N_16000": [1, 2, 1, 2],
             }
         )
@@ -317,7 +317,7 @@ class TestCountAminoAcidChangeAllCancers:
                     "GENE3",
                     "GENE4",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -349,7 +349,7 @@ class TestCountAminoAcidChangeAllCancers:
         expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE2", "GENE3", "GENE3"],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -424,7 +424,7 @@ class TestCountAminoAcidChangePerCancerType:
                     "GENE3",
                     "GENE4",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -467,7 +467,7 @@ class TestCountAminoAcidChangePerCancerType:
                     "p.Gly200Cys",
                     "p.Arg400Gln",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -538,7 +538,7 @@ class TestCountAminoAcidChangePerCancerType:
                     "GENE3",
                     "GENE4",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -584,7 +584,7 @@ class TestCountAminoAcidChangePerCancerType:
                     "p.Arg400Gln",
                     "p.Arg400Gln",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -621,7 +621,7 @@ class TestCountAminoAcidChangeHaemoncCancers:
                     "GENE2",
                     "GENE3",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -670,7 +670,7 @@ class TestCountAminoAcidChangeHaemoncCancers:
                     "GENE3",
                     "GENE4",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -731,36 +731,6 @@ class TestCountAminoAcidChangeHaemoncCancers:
         )
 
 
-class TestExtractPositionFromHGVSc:
-    def test_extract_position_from_hgvsc(self):
-        df = pl.from_dict(
-            {
-                "HGVSc": [
-                    "ENST00000269305.4:c.637C>T",
-                    "ENST00000278616.4:c.1027_1030del",
-                    "ENST00000269305.4:c.637del",
-                ]
-            }
-        )
-
-        result = utils.counting.extract_position_from_hgvsc(df)
-
-        expected = pl.from_dict(
-            {
-                "HGVSc": [
-                    "ENST00000269305.4:c.637C>T",
-                    "ENST00000278616.4:c.1027_1030del",
-                    "ENST00000269305.4:c.637del",
-                ],
-                "CDS_position": [637, 1027, 637],
-            }
-        )
-
-        assert_frame_equal(
-            result, expected, check_column_order=False, check_row_order=False
-        )
-
-
 class TestCountFrameshiftTruncatingAndNonsenseInCancers:
     def test_count_frameshift_truncating_and_nonsense(self):
         df = pl.from_dict(
@@ -774,7 +744,7 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "GENE1",
                     "GENE1",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -783,7 +753,7 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "Transcript2",
                     "Transcript2",
                 ],
-                "CDS_position": [
+                "Protein_position_start": [
                     480,
                     481,
                     481,
@@ -818,7 +788,7 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "GENE1",
                     "GENE1",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -826,8 +796,8 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     "Transcript2",
                     "Transcript2",
                 ],
-                "CDS_position": [480, 481, 483, 484, 485, 511],
-                "SameOrDownstreamTruncatingVariantsPerCDS.All_Cancers_Count_N_500": [
+                "Protein_position_start": [480, 481, 483, 484, 485, 511],
+                "SameOrDownstreamTruncatingVariantsPerAA.All_Cancers_Count_N_500": [
                     4,
                     4,
                     2,
@@ -856,7 +826,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     "GENE1",
                     "GENE1",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -865,7 +835,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     "Transcript2",
                     "Transcript2",
                 ],
-                "CDS_position": [
+                "Protein_position_start": [
                     480,
                     481,
                     481,
@@ -917,7 +887,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     "GENE1",
                     "GENE1",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -925,8 +895,8 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     "Transcript2",
                     "Transcript2",
                 ],
-                "CDS_position": [480, 481, 483, 484, 485, 511],
-                "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 1_Count_N_500": [
+                "Protein_position_start": [480, 481, 483, 484, 485, 511],
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 1_Count_N_500": [
                     2,
                     1,
                     1,
@@ -934,7 +904,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     0,
                 ],
-                "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 2_Count_N_4": [
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 2_Count_N_4": [
                     1,
                     1,
                     0,
@@ -942,7 +912,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     1,
                     1,
                 ],
-                "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 3_Count_N_3": [
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 3_Count_N_3": [
                     1,
                     1,
                     0,
@@ -950,7 +920,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     0,
                 ],
-                "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 4_Count_N_50": [
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 4_Count_N_50": [
                     1,
                     1,
                     1,
@@ -958,7 +928,7 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     1,
                     0,
                 ],
-                "SameOrDownstreamTruncatingVariantsPerCDS.Cancer 5_Count_N_120": [
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 5_Count_N_120": [
                     0,
                     0,
                     0,
@@ -975,52 +945,21 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
 
 
 class TestAddDeletionPositions:
-    def test_add_deletion_positions_hgvsc(self):
+    def test_add_deletion_positions(self):
         df = pl.from_dict(
             {
-                "HGVSc": [
-                    "ENST00000269305.4:c.480_485del",
-                    "ENST00000296930.5:c.511_524+1del",
-                    "ENST00000269305.4:c.480del",
+                "Protein_position": [
+                    "480-485",
+                    "511-524",
+                    "480",
                 ]
             }
         )
-        result = utils.counting.add_deletion_positions(df, source="HGVSc")
+        result = utils.counting.add_deletion_positions(df)
         expected = pl.from_dict(
             {
-                "HGVSc": [
-                    "ENST00000269305.4:c.480_485del",
-                    "ENST00000296930.5:c.511_524+1del",
-                    "ENST00000269305.4:c.480del",
-                ],
                 "del_start": [480, 511, 480],
                 "del_end": [485, 524, 480],
-            }
-        )
-        assert_frame_equal(
-            result, expected, check_column_order=False, check_row_order=False
-        )
-
-    def test_add_deletion_positions_hgvsp(self):
-        df = pl.from_dict(
-            {
-                "HGVSp": [
-                    "p.Asp359_Thr364delinsGlyArgAla",
-                    "p.Gln367_Gln379del",
-                    "p.Leu370del",
-                ]
-            }
-        )
-        result = utils.counting.add_deletion_positions(df, source="HGVSp")
-        expected = pl.from_dict(
-            {
-                "HGVSp": [
-                    "p.Asp359_Thr364delinsGlyArgAla",
-                    "p.Gln367_Gln379del",
-                    "p.Leu370del",
-                ],
-                "del_start": [359, 367, 370],
-                "del_end": [364, 379, 370],
             }
         )
         assert_frame_equal(
@@ -1042,7 +981,7 @@ class TestCountNestedInframeDeletionsAllCancers:
                     "GENE3",
                     "GENE3",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -1078,7 +1017,7 @@ class TestCountNestedInframeDeletionsAllCancers:
         )
 
         result = utils.counting.count_nested_inframe_deletions(
-            df, "All_Cancers", 5000, position_method="CDS"
+            df, "All_Cancers", 5000
         )
 
         expected = pl.from_dict(
@@ -1090,7 +1029,7 @@ class TestCountNestedInframeDeletionsAllCancers:
                     "GENE3",
                     "GENE3",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -1099,7 +1038,7 @@ class TestCountNestedInframeDeletionsAllCancers:
                 ],
                 "del_start": [480, 481, 483, 484, 485],
                 "del_end": [485, 482, 484, 485, 485],
-                "NestedInframeDeletionsPerCDS.All_Cancers_Count_N_5000": [
+                "NestedInframeDeletionsPerAA.All_Cancers_Count_N_5000": [
                     2,
                     2,
                     1,
@@ -1126,7 +1065,7 @@ class TestCountNestedInframeDeletionsAllCancers:
                     "GENE3",
                     "GENE3",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -1162,7 +1101,7 @@ class TestCountNestedInframeDeletionsAllCancers:
         )
 
         result = utils.counting.count_nested_inframe_deletions(
-            df, "All_Cancers", 5000, position_method="CDS"
+            df, "All_Cancers", 5000
         )
 
         expected = pl.from_dict(
@@ -1175,7 +1114,7 @@ class TestCountNestedInframeDeletionsAllCancers:
                     "GENE3",
                     "GENE3",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript2",
@@ -1185,7 +1124,7 @@ class TestCountNestedInframeDeletionsAllCancers:
                 ],
                 "del_start": [480, 481, 481, 483, 484, 485],
                 "del_end": [485, 482, 482, 484, 485, 485],
-                "NestedInframeDeletionsPerCDS.All_Cancers_Count_N_5000": [
+                "NestedInframeDeletionsPerAA.All_Cancers_Count_N_5000": [
                     1,
                     1,
                     1,
@@ -1215,7 +1154,7 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     "GENE1",
                     "GENE1",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -1265,13 +1204,13 @@ class TestCountNestedInframeDeletionsPerCancerType:
             "Cancer 5": 120,
         }
         result = utils.counting.count_nested_inframe_deletions_per_cancer_type(
-            df, per_patient_cancer_total, position_method="CDS"
+            df, per_patient_cancer_total
         )
 
         expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE1", "GENE1", "GENE1"],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -1280,35 +1219,35 @@ class TestCountNestedInframeDeletionsPerCancerType:
                 ],
                 "del_start": [480, 481, 483, 484, 485],
                 "del_end": [485, 482, 484, 485, 485],
-                "NestedInframeDeletionsPerCDS.Cancer 1_Count_N_500": [
+                "NestedInframeDeletionsPerAA.Cancer 1_Count_N_500": [
                     2,
                     1,
                     0,
                     1,
                     0,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 2_Count_N_4": [
+                "NestedInframeDeletionsPerAA.Cancer 2_Count_N_4": [
                     1,
                     1,
                     0,
                     0,
                     0,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 3_Count_N_3": [
+                "NestedInframeDeletionsPerAA.Cancer 3_Count_N_3": [
                     1,
                     0,
                     1,
                     0,
                     0,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 4_Count_N_50": [
+                "NestedInframeDeletionsPerAA.Cancer 4_Count_N_50": [
                     1,
                     0,
                     0,
                     1,
                     1,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 5_Count_N_120": [
+                "NestedInframeDeletionsPerAA.Cancer 5_Count_N_120": [
                     0,
                     0,
                     0,
@@ -1335,7 +1274,7 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     "GENE1",
                     "GENE1",
                 ],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -1385,13 +1324,13 @@ class TestCountNestedInframeDeletionsPerCancerType:
             "Cancer 5": 120,
         }
         result = utils.counting.count_nested_inframe_deletions_per_cancer_type(
-            df, per_patient_cancer_total, position_method="CDS"
+            df, per_patient_cancer_total
         )
 
         expected = pl.from_dict(
             {
                 "Hugo_Symbol": ["GENE1", "GENE1", "GENE1", "GENE1", "GENE1"],
-                "Transcript_ID": [
+                "RefSeq": [
                     "Transcript1",
                     "Transcript1",
                     "Transcript1",
@@ -1400,35 +1339,35 @@ class TestCountNestedInframeDeletionsPerCancerType:
                 ],
                 "del_start": [480, 481, 483, 484, 485],
                 "del_end": [485, 482, 484, 485, 485],
-                "NestedInframeDeletionsPerCDS.Cancer 1_Count_N_500": [
+                "NestedInframeDeletionsPerAA.Cancer 1_Count_N_500": [
                     1,
                     1,
                     0,
                     1,
                     0,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 2_Count_N_4": [
+                "NestedInframeDeletionsPerAA.Cancer 2_Count_N_4": [
                     1,
                     1,
                     0,
                     0,
                     0,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 3_Count_N_3": [
+                "NestedInframeDeletionsPerAA.Cancer 3_Count_N_3": [
                     1,
                     0,
                     1,
                     0,
                     0,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 4_Count_N_50": [
+                "NestedInframeDeletionsPerAA.Cancer 4_Count_N_50": [
                     0,
                     0,
                     0,
                     1,
                     1,
                 ],
-                "NestedInframeDeletionsPerCDS.Cancer 5_Count_N_120": [
+                "NestedInframeDeletionsPerAA.Cancer 5_Count_N_120": [
                     0,
                     0,
                     0,
