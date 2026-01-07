@@ -128,7 +128,7 @@ docker run -v /home/Genie:/data -w /data <vep-image-id> vep \
   --no_stats \
   --compress_output bgzip
 ```
-Split out VEP annotations to separate INFO fields. prefixed with `_CSQ`:
+Split out VEP annotations to separate INFO fields. prefixed with `CSQ_`:
 ```
 bcftools +split-vep --columns - -a CSQ -Ou -p 'CSQ_' -d \
   data_mutations_extended_GRCh38_normalised_nochr_or_alt_annotated.vcf.gz \

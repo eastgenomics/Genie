@@ -7,6 +7,7 @@ from utils.aggregation import (
     create_df_with_one_row_per_variant,
     get_rows_for_cancer_types,
     get_truncating_variants,
+    add_protein_position_start,
     get_inframe_deletions,
 )
 
@@ -127,6 +128,40 @@ class TestGetTruncatingVariants:
                 "PATIENT_ID": [1, 2, 3],
                 "CANCER_TYPE": ["Lung", "Breast", "Colon"],
                 "Protein_position": ["23", "50", "20"],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+
+class TestAddProteinPositionStart:
+    def test_add_protein_position_start_mixed(self):
+        df = pl.DataFrame({"Protein_position": ["221-222", "5-10", "100"]})
+
+        result = add_protein_position_start(df)
+
+        expected = pl.DataFrame(
+            {
+                "Protein_position": ["221-222", "5-10", "100"],
+                "Protein_position_start": [221, 5, 100],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+    def test_add_protein_position_start_empty(self):
+        df = pl.DataFrame({"Protein_position": ["221", None]})
+
+        result = add_protein_position_start(df)
+
+        expected = pl.DataFrame(
+            {
+                "Protein_position": ["221", None],
+                "Protein_position_start": [221, None],
             }
         )
 

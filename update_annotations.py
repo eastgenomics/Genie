@@ -351,7 +351,6 @@ def replace_annotations(genie_merged: pd.DataFrame) -> pd.DataFrame:
             "VEP_HGVSc": "HGVSc",
             "VEP_HGVSp": "HGVSp",
             "VEP_EXON": "Exon_Number",
-            "VEP_INTRON": "Intron_Number",
             "VEP_CDS_position": "CDS_position",
             "VEP_Protein_position": "Protein_position",
             "VEP_CANONICAL": "CANONICAL",
