@@ -37,6 +37,11 @@ class TestCountSameNucleotideChangeAllCancers:
             {
                 "grch38_description": ["1_100_A_T", "2_200_G_C", "3_300_T_G"],
                 "SameNucleotideChange.All_Cancers_Count_N_100": [1, 2, 1],
+                "SameNucleotideChange.All_Cancers_Patient_IDs": [
+                    "patient_1",
+                    "patient_2&patient_3",
+                    "patient_4",
+                ],
             }
         )
 
@@ -60,6 +65,7 @@ class TestCountSameNucleotideChangeAllCancers:
             {
                 "grch38_description": ["1_100_A_T"],
                 "SameNucleotideChange.All_Cancers_Count_N_100": [1],
+                "SameNucleotideChange.All_Cancers_Patient_IDs": ["patient_1"],
             }
         )
 
@@ -115,9 +121,29 @@ class TestCountSameNucleotideChangePerCancerType:
                     0,
                     0,
                 ],
+                "SameNucleotideChange.T-Lymphoblastic Leukemia/Lymphoma_Patient_IDs": [
+                    "patient_1",
+                    "",
+                    "",
+                ],
                 "SameNucleotideChange.Lymphatic Cancer_Count_N_2": [0, 1, 0],
+                "SameNucleotideChange.Lymphatic Cancer_Patient_IDs": [
+                    "",
+                    "patient_2",
+                    "",
+                ],
                 "SameNucleotideChange.Blood Cancer_Count_N_1": [0, 1, 0],
+                "SameNucleotideChange.Blood Cancer_Patient_IDs": [
+                    "",
+                    "patient_3",
+                    "",
+                ],
                 "SameNucleotideChange.Mastocytosis_Count_N_1": [0, 0, 1],
+                "SameNucleotideChange.Mastocytosis_Patient_IDs": [
+                    "",
+                    "",
+                    "patient_4",
+                ],
             }
         )
 
@@ -201,6 +227,12 @@ class TestCountNucleotideChangeHaemoncCancers:
                     1,
                     0,
                 ],
+                "SameNucleotideChange.Haemonc_Cancers_Patient_IDs": [
+                    "patient_1",
+                    "patient_2&patient_3",
+                    "patient_4",
+                    "",
+                ],
             }
         )
 
@@ -272,6 +304,12 @@ class TestCountAminoAcidChangeAllCancers:
                 ],
                 "RefSeq": ["ENST00000367770"] * 4,
                 "SameAminoAcidChange.All_Cancers_Count_N_16000": [1, 2, 1, 2],
+                "SameAminoAcidChange.All_Cancers_Patient_IDs": [
+                    "patient_1",
+                    "patient_2&patient_3",
+                    "patient_4",
+                    "patient_1&patient_7",
+                ],
             }
         )
 
@@ -369,6 +407,13 @@ class TestCountAminoAcidChangeAllCancers:
                     1,
                     2,
                     1,
+                ],
+                "SameAminoAcidChange.All_Cancers_Patient_IDs": [
+                    "patient_1",
+                    "patient_2&patient_3",
+                    "patient_4",
+                    "patient_1&patient_7",
+                    "patient_8",
                 ],
             }
         )
@@ -479,9 +524,33 @@ class TestCountAminoAcidChangePerCancerType:
                     0,
                     1,
                 ],
+                "SameAminoAcidChange.Cancer 1_Patient_IDs": [
+                    "patient_1",
+                    "",
+                    "",
+                    "patient_1",
+                ],
                 "SameAminoAcidChange.Cancer 2_Count_N_4": [0, 1, 0, 1],
+                "SameAminoAcidChange.Cancer 2_Patient_IDs": [
+                    "",
+                    "patient_2",
+                    "",
+                    "patient_7",
+                ],
                 "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1, 0, 0],
+                "SameAminoAcidChange.Cancer 3_Patient_IDs": [
+                    "",
+                    "patient_3",
+                    "",
+                    "",
+                ],
                 "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 0, 1, 0],
+                "SameAminoAcidChange.Cancer 4_Patient_IDs": [
+                    "",
+                    "",
+                    "patient_4",
+                    "",
+                ],
             }
         )
 
@@ -592,9 +661,37 @@ class TestCountAminoAcidChangePerCancerType:
                     "Transcript4",
                 ],
                 "SameAminoAcidChange.Cancer 1_Count_N_500": [1, 0, 0, 1, 0],
+                "SameAminoAcidChange.Cancer 1_Patient_IDs": [
+                    "patient_1",
+                    "",
+                    "",
+                    "patient_1",
+                    "",
+                ],
                 "SameAminoAcidChange.Cancer 2_Count_N_4": [0, 1, 0, 1, 1],
+                "SameAminoAcidChange.Cancer 2_Patient_IDs": [
+                    "",
+                    "patient_2",
+                    "",
+                    "patient_7",
+                    "patient_8",
+                ],
                 "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1, 0, 0, 0],
+                "SameAminoAcidChange.Cancer 3_Patient_IDs": [
+                    "",
+                    "patient_3",
+                    "",
+                    "",
+                    "",
+                ],
                 "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 0, 1, 0, 0],
+                "SameAminoAcidChange.Cancer 4_Patient_IDs": [
+                    "",
+                    "",
+                    "patient_4",
+                    "",
+                    "",
+                ],
             }
         )
 
@@ -723,6 +820,12 @@ class TestCountAminoAcidChangeHaemoncCancers:
                     1,
                     0,
                 ],
+                "SameAminoAcidChange.Haemonc_Cancers_Patient_IDs": [
+                    "patient_1",
+                    "patient_2&patient_3",
+                    "patient_4",
+                    "",
+                ],
             }
         )
 
@@ -804,6 +907,14 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
                     1,
                     2,
                     1,
+                ],
+                "SameOrDownstreamTruncatingVariantsPerAA.All_Cancers_Patient_IDs": [
+                    "patient_1&patient_2&patient_3&patient_4",
+                    "patient_1&patient_2&patient_3&patient_4",
+                    "patient_3&patient_4",
+                    "patient_4",
+                    "patient_1&patient_5",
+                    "patient_1",
                 ],
             }
         )
@@ -904,6 +1015,14 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     0,
                 ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 1_Patient_IDs": [
+                    "patient_1&patient_4",
+                    "patient_4",
+                    "patient_4",
+                    "patient_4",
+                    "",
+                    "",
+                ],
                 "SameOrDownstreamTruncatingVariantsPerAA.Cancer 2_Count_N_4": [
                     1,
                     1,
@@ -911,6 +1030,14 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     1,
                     1,
+                ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 2_Patient_IDs": [
+                    "patient_1",
+                    "patient_1",
+                    "",
+                    "",
+                    "patient_5",
+                    "patient_5",
                 ],
                 "SameOrDownstreamTruncatingVariantsPerAA.Cancer 3_Count_N_3": [
                     1,
@@ -920,6 +1047,14 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     0,
                 ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 3_Patient_IDs": [
+                    "patient_2",
+                    "patient_2",
+                    "",
+                    "",
+                    "",
+                    "",
+                ],
                 "SameOrDownstreamTruncatingVariantsPerAA.Cancer 4_Count_N_50": [
                     1,
                     1,
@@ -928,6 +1063,14 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     1,
                     0,
                 ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 4_Patient_IDs": [
+                    "patient_3",
+                    "patient_3",
+                    "patient_3",
+                    "",
+                    "patient_5",
+                    "",
+                ],
                 "SameOrDownstreamTruncatingVariantsPerAA.Cancer 5_Count_N_120": [
                     0,
                     0,
@@ -935,6 +1078,14 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     0,
                     0,
+                ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Cancer 5_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
                 ],
             }
         )
@@ -1045,6 +1196,13 @@ class TestCountNestedInframeDeletionsAllCancers:
                     2,
                     1,
                 ],
+                "NestedInframeDeletionsPerAA.All_Cancers_Patient_IDs": [
+                    "patient_1&patient_2",
+                    "patient_1&patient_2",
+                    "patient_3",
+                    "patient_4&patient_5",
+                    "patient_5",
+                ],
             }
         )
 
@@ -1131,6 +1289,14 @@ class TestCountNestedInframeDeletionsAllCancers:
                     1,
                     2,
                     1,
+                ],
+                "NestedInframeDeletionsPerAA.All_Cancers_Patient_IDs": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_3",
+                    "patient_4&patient_5",
+                    "patient_5",
                 ],
             }
         )
@@ -1226,12 +1392,26 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     1,
                     0,
                 ],
+                "NestedInframeDeletionsPerAA.Cancer 1_Patient_IDs": [
+                    "patient_1&patient_4",
+                    "patient_1",
+                    "",
+                    "patient_4",
+                    "",
+                ],
                 "NestedInframeDeletionsPerAA.Cancer 2_Count_N_4": [
                     1,
                     1,
                     0,
                     0,
                     0,
+                ],
+                "NestedInframeDeletionsPerAA.Cancer 2_Patient_IDs": [
+                    "patient_2",
+                    "patient_2",
+                    "",
+                    "",
+                    "",
                 ],
                 "NestedInframeDeletionsPerAA.Cancer 3_Count_N_3": [
                     1,
@@ -1240,6 +1420,13 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     0,
                     0,
                 ],
+                "NestedInframeDeletionsPerAA.Cancer 3_Patient_IDs": [
+                    "patient_3",
+                    "",
+                    "patient_3",
+                    "",
+                    "",
+                ],
                 "NestedInframeDeletionsPerAA.Cancer 4_Count_N_50": [
                     1,
                     0,
@@ -1247,12 +1434,26 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     1,
                     1,
                 ],
+                "NestedInframeDeletionsPerAA.Cancer 4_Patient_IDs": [
+                    "patient_5",
+                    "",
+                    "",
+                    "patient_5",
+                    "patient_5",
+                ],
                 "NestedInframeDeletionsPerAA.Cancer 5_Count_N_120": [
                     0,
                     0,
                     0,
                     0,
                     0,
+                ],
+                "NestedInframeDeletionsPerAA.Cancer 5_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
                 ],
             }
         )
@@ -1346,12 +1547,26 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     1,
                     0,
                 ],
+                "NestedInframeDeletionsPerAA.Cancer 1_Patient_IDs": [
+                    "patient_1",
+                    "patient_1",
+                    "",
+                    "patient_4",
+                    "",
+                ],
                 "NestedInframeDeletionsPerAA.Cancer 2_Count_N_4": [
                     1,
                     1,
                     0,
                     0,
                     0,
+                ],
+                "NestedInframeDeletionsPerAA.Cancer 2_Patient_IDs": [
+                    "patient_2",
+                    "patient_2",
+                    "",
+                    "",
+                    "",
                 ],
                 "NestedInframeDeletionsPerAA.Cancer 3_Count_N_3": [
                     1,
@@ -1360,6 +1575,13 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     0,
                     0,
                 ],
+                "NestedInframeDeletionsPerAA.Cancer 3_Patient_IDs": [
+                    "patient_3",
+                    "",
+                    "patient_3",
+                    "",
+                    "",
+                ],
                 "NestedInframeDeletionsPerAA.Cancer 4_Count_N_50": [
                     0,
                     0,
@@ -1367,12 +1589,26 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     1,
                     1,
                 ],
+                "NestedInframeDeletionsPerAA.Cancer 4_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "patient_5",
+                    "patient_5",
+                ],
                 "NestedInframeDeletionsPerAA.Cancer 5_Count_N_120": [
                     0,
                     0,
                     0,
                     0,
                     0,
+                ],
+                "NestedInframeDeletionsPerAA.Cancer 5_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
                 ],
             }
         )

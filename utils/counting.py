@@ -30,10 +30,16 @@ def count_same_nucleotide_change(
     count_col = (
         f"SameNucleotideChange.{count_type}_Count_N_{unique_patient_total}"
     )
+    patient_id_col = f"SameNucleotideChange.{count_type}_Patient_IDs"
 
     # Group by variant and count unique patients per variant
     nucleotide_change_counts = df.group_by("grch38_description").agg(
-        pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col)
+        pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col),
+        pl.col("PATIENT_ID")
+        .unique()
+        .sort()
+        .str.join("&")
+        .alias(patient_id_col),
     )
 
     # If this is a grouped (e.g. haemonc cancer) count, all variants should
@@ -41,16 +47,22 @@ def count_same_nucleotide_change(
     if all_variants_df is not None:
         all_variants = all_variants_df.select("grch38_description").unique()
 
-        result = (
-            all_variants.join(
-                nucleotide_change_counts, on="grch38_description", how="left"
-            )
-            .with_columns(pl.col(count_col).fill_null(0))
-            .with_columns(pl.col(count_col).cast(pl.Int64))
+        result = all_variants.join(
+            nucleotide_change_counts, on="grch38_description", how="left"
+        ).with_columns(
+            [
+                pl.col(count_col).fill_null(0).cast(pl.Int64),
+                pl.col(patient_id_col).fill_null(""),
+            ]
         )
         return result
 
     return nucleotide_change_counts
+
+
+def rename(cols, suffix_fn, ignore_cols):
+    ignore = set(ignore_cols)
+    return [c if c in ignore else suffix_fn(c) for c in cols]
 
 
 def count_same_nucleotide_change_per_cancer_type(
@@ -73,40 +85,51 @@ def count_same_nucleotide_change_per_cancer_type(
     """
     # Group by variant and cancer type and count unique patients
     per_cancer_counts = df.group_by(["grch38_description", "CANCER_TYPE"]).agg(
-        pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias("patient_count")
+        pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias("patient_count"),
+        pl.col("PATIENT_ID")
+        .unique()
+        .sort()
+        .str.join("&")
+        .alias("patient_ids"),
     )
 
     # Pivot so all cancer types are columns
-    all_cancer_counts = per_cancer_counts.pivot(
+    counts_wide = per_cancer_counts.pivot(
         values="patient_count",
         index="grch38_description",
         on="CANCER_TYPE",
         aggregate_function="first",
+    ).fill_null(0)
+
+    patients_wide = per_cancer_counts.pivot(
+        values="patient_ids",
+        index="grch38_description",
+        on="CANCER_TYPE",
+        aggregate_function="first",
+    ).fill_null("")
+
+    # Update count column names to add the patient N
+    counts_wide.columns = rename(
+        counts_wide.columns,
+        lambda c: (
+            f"SameNucleotideChange.{c}_Count_N_{unique_patients_per_cancer[c]}"
+        ),
+        ["grch38_description"],
     )
 
-    # Fill missing cancer count values with 0
-    all_cancer_counts = all_cancer_counts.fill_null(0)
+    patients_wide.columns = rename(
+        patients_wide.columns,
+        lambda c: f"SameNucleotideChange.{c}_Patient_IDs",
+        ["grch38_description"],
+    )
 
-    # Rename columns to include patient N per cancer type
-    present = [
-        c for c in all_cancer_counts.columns if c not in ("grch38_description")
-    ]
-    missing = set(present) - set(unique_patients_per_cancer)
-    if missing:
-        raise ValueError(
-            f"Missing patient totals for cancer types: {sorted(missing)}"
-        )
-    new_columns = [
-        (
-            col
-            if col == "grch38_description"
-            else f"SameNucleotideChange.{col}_Count_N_{unique_patients_per_cancer[col]}"
-        )
-        for col in all_cancer_counts.columns
-    ]
-    all_cancer_counts.columns = new_columns
+    result = counts_wide.join(
+        patients_wide,
+        on="grch38_description",
+        how="left",
+    )
 
-    return all_cancer_counts
+    return result
 
 
 def count_amino_acid_change(
@@ -138,16 +161,24 @@ def count_amino_acid_change(
     count_col = (
         f"SameAminoAcidChange.{count_type}_Count_N_{unique_patient_total}"
     )
+    patient_id_col = f"SameAminoAcidChange.{count_type}_Patient_IDs"
 
     # Group by gene + amino acid change and count unique patients
     amino_acid_change_counts = (
         df.filter(pl.col("HGVSp").is_not_null())
         .group_by(["Hugo_Symbol", "RefSeq", "HGVSp"])
-        .agg(pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col))
+        .agg(
+            pl.col("PATIENT_ID").n_unique().cast(pl.Int64).alias(count_col),
+            pl.col("PATIENT_ID")
+            .unique()
+            .sort()
+            .str.join("&")
+            .alias(patient_id_col),
+        )
     )
 
     # If this is a grouped (e.g. haemonc cancer) count, then all variants
-    #  with HGVSp should have a count, so add 0 if not present in grouped count
+    # with HGVSp should have a count, so add 0 if not present in grouped count
     if all_variants_df is not None:
         result = (
             all_variants_df.filter(pl.col("HGVSp").is_not_null())
@@ -158,7 +189,12 @@ def count_amino_acid_change(
                 on=["Hugo_Symbol", "RefSeq", "HGVSp"],
                 how="left",
             )
-            .with_columns(pl.col(count_col).fill_null(0))
+            .with_columns(
+                [
+                    pl.col(count_col).fill_null(0).cast(pl.Int64),
+                    pl.col(patient_id_col).fill_null(""),
+                ]
+            )
         ).drop(["Hugo_Symbol", "RefSeq", "HGVSp"])
         return result
 
@@ -186,7 +222,6 @@ def count_amino_acid_change_per_cancer_type(
     pl.DataFrame
         DataFrame with amino acid change counts per cancer
     """
-
     # Count how many patients have same amino acid change for each cancer type
     amino_acid_count_per_present_cancer = (
         df.filter(pl.col("HGVSp").is_not_null())
@@ -195,41 +230,51 @@ def count_amino_acid_change_per_cancer_type(
             pl.col("PATIENT_ID")
             .n_unique()
             .cast(pl.Int64)
-            .alias("patient_count")
+            .alias("patient_count"),
+            pl.col("PATIENT_ID")
+            .unique()
+            .sort()
+            .str.join("&")
+            .alias("patient_ids"),
         )
     )
 
     # Pivot so all cancer types have counts
-    aa_per_cancer_counts = amino_acid_count_per_present_cancer.pivot(
+    counts_wide = amino_acid_count_per_present_cancer.pivot(
         values="patient_count",
         index=["Hugo_Symbol", "HGVSp", "RefSeq"],
         on="CANCER_TYPE",
         aggregate_function="first",
     ).fill_null(0)
 
-    # Rename columns to include patient N per cancer type
-    present = [
-        c
-        for c in aa_per_cancer_counts.columns
-        if c not in ["Hugo_Symbol", "HGVSp", "RefSeq"]
-    ]
-    missing = set(present) - set(unique_patients_per_cancer)
-    if missing:
-        raise ValueError(
-            f"Missing patient totals for cancer types: {sorted(missing)}"
-        )
-    new_columns = []
-    for col in aa_per_cancer_counts.columns:
-        if col in ["Hugo_Symbol", "HGVSp", "RefSeq"]:
-            new_columns.append(col)
-        else:
-            new_columns.append(
-                f"SameAminoAcidChange.{col}_Count_N_{unique_patients_per_cancer[col]}"
-            )
+    patients_wide = amino_acid_count_per_present_cancer.pivot(
+        values="patient_ids",
+        index=["Hugo_Symbol", "HGVSp", "RefSeq"],
+        on="CANCER_TYPE",
+        aggregate_function="first",
+    ).fill_null("")
 
-    aa_per_cancer_counts.columns = new_columns
+    counts_wide.columns = rename(
+        counts_wide.columns,
+        lambda c: (
+            f"SameAminoAcidChange.{c}_Count_N_{unique_patients_per_cancer[c]}"
+        ),
+        ["Hugo_Symbol", "HGVSp", "RefSeq"],
+    )
 
-    return aa_per_cancer_counts
+    patients_wide.columns = rename(
+        patients_wide.columns,
+        lambda c: f"SameAminoAcidChange.{c}_Patient_IDs",
+        ["Hugo_Symbol", "HGVSp", "RefSeq"],
+    )
+
+    result = counts_wide.join(
+        patients_wide,
+        on=["Hugo_Symbol", "HGVSp", "RefSeq"],
+        how="left",
+    )
+
+    return result
 
 
 def count_frameshift_truncating_and_nonsense(
@@ -272,17 +317,19 @@ def count_frameshift_truncating_and_nonsense(
 
         rows = []
         for pos in positions:
-            downstream_patients = {
-                pid
-                for j, pid in enumerate(subset["PATIENT_ID"])
-                if subset["Protein_position_start"][j] >= pos
-            }
+            downstream_patients = set()
+            for j in range(len(subset)):
+                if subset["Protein_position_start"][j] >= pos:
+                    downstream_patients.add(subset["PATIENT_ID"][j])
             rows.append(
                 {
                     "Hugo_Symbol": gene,
                     "RefSeq": transcript,
                     "Protein_position_start": pos,
                     "downstream_patient_count": len(downstream_patients),
+                    "downstream_patient_ids": "&".join(
+                        sorted(downstream_patients)
+                    ),
                 }
             )
 
@@ -298,6 +345,7 @@ def count_frameshift_truncating_and_nonsense(
                 "RefSeq": pl.Series([], dtype=pl.Utf8),
                 "Protein_position_start": pl.Series([], dtype=pl.Int64),
                 "downstream_patient_count": pl.Series([], dtype=pl.Int64),
+                "downstream_patient_ids": pl.Series([], dtype=pl.Utf8),
             }
         )
     )
@@ -306,6 +354,8 @@ def count_frameshift_truncating_and_nonsense(
     #  variants should have a count, so add 0 if not present in grouped count
     col_name = f"SameOrDownstreamTruncatingVariantsPerAA.{cancer_count_type}_Count_N_{patient_total}"
     df_counts = df_counts.rename({"downstream_patient_count": col_name})
+    sample_col_name = f"SameOrDownstreamTruncatingVariantsPerAA.{cancer_count_type}_Patient_IDs"
+    df_counts = df_counts.rename({"downstream_patient_ids": sample_col_name})
 
     # If given, join back to truncating_variants to ensure all rows are present
     if truncating_variants is not None:
@@ -372,15 +422,19 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
             # Map position to downstream patient counts
             rows = []
             for pos in gene_positions:
-                downstream_patients = {
-                    pid
-                    for j, pid in enumerate(subset["PATIENT_ID"])
-                    if subset["Protein_position_start"][j] >= pos
-                }
+                downstream_patients = set()
+
+                for j in range(len(subset)):
+                    if subset["Protein_position_start"][j] >= pos:
+                        downstream_patients.add(subset["PATIENT_ID"][j])
+
                 rows.append(
                     {
                         "Protein_position_start": pos,
                         "downstream_patient_count": len(downstream_patients),
+                        "downstream_patient_ids": "&".join(
+                            sorted(downstream_patients)
+                        ),
                     }
                 )
 
@@ -404,29 +458,48 @@ def count_frameshift_truncating_and_nonsense_per_cancer_type(
                 "CANCER_TYPE": pl.Series([], dtype=pl.Utf8),
                 "Protein_position_start": pl.Series([], dtype=pl.Int64),
                 "downstream_patient_count": pl.Series([], dtype=pl.Int64),
+                "downstream_patient_ids": pl.Series([], dtype=pl.Utf8),
             }
         )
     )
 
     # Pivot so each cancer type becomes a column
-    pivoted = combined.pivot(
+    counts_wide = combined.pivot(
         values="downstream_patient_count",
         index=["Hugo_Symbol", "RefSeq", "Protein_position_start"],
         on="CANCER_TYPE",
         aggregate_function="first",
     ).fill_null(0)
 
-    # Rename columns to include patient totals
-    new_column_names = {}
-    for col in pivoted.columns:
-        if col in per_cancer_patient_total:
-            new_column_names[col] = (
-                f"SameOrDownstreamTruncatingVariantsPerAA.{col}_Count_N_{per_cancer_patient_total[col]}"
-            )
-    if new_column_names:
-        pivoted = pivoted.rename(new_column_names)
+    patients_wide = combined.pivot(
+        values="downstream_patient_ids",
+        index=["Hugo_Symbol", "RefSeq", "Protein_position_start"],
+        on="CANCER_TYPE",
+        aggregate_function="first",
+    ).fill_null("")
 
-    return pivoted
+    # Rename columns to include patient totals
+    count_rename = {}
+    patient_rename = {}
+
+    for cancer, total in per_cancer_patient_total.items():
+        count_rename[cancer] = (
+            f"SameOrDownstreamTruncatingVariantsPerAA.{cancer}_Count_N_{total}"
+        )
+        patient_rename[cancer] = (
+            f"SameOrDownstreamTruncatingVariantsPerAA.{cancer}_Patient_IDs"
+        )
+
+    counts_wide = counts_wide.rename(count_rename)
+    patients_wide = patients_wide.rename(patient_rename)
+
+    result = counts_wide.join(
+        patients_wide,
+        on=["Hugo_Symbol", "RefSeq", "Protein_position_start"],
+        how="left",
+    )
+
+    return result
 
 
 def add_deletion_positions(
@@ -532,6 +605,7 @@ def count_nested_inframe_deletions(
                     "del_start": del_start,
                     "del_end": del_end,
                     "nested_patient_count": len(nested_patients),
+                    "nested_patient_ids": "&".join(sorted(nested_patients)),
                 }
             )
 
@@ -548,13 +622,22 @@ def count_nested_inframe_deletions(
                 "del_start": pl.Series([], dtype=pl.Int64),
                 "del_end": pl.Series([], dtype=pl.Int64),
                 "nested_patient_count": pl.Series([], dtype=pl.Int64),
+                "nested_patient_ids": pl.Series([], dtype=pl.Utf8),
             }
         )
     )
 
     # Rename nested count column with cohort info
     col_name = f"NestedInframeDeletionsPerAA.{cancer_count_type}_Count_N_{patient_total}"
-    inframe_counts = inframe_counts.rename({"nested_patient_count": col_name})
+    patient_id_col = (
+        f"NestedInframeDeletionsPerAA.{cancer_count_type}_Patient_IDs"
+    )
+    inframe_counts = inframe_counts.rename(
+        {
+            "nested_patient_count": col_name,
+            "nested_patient_ids": patient_id_col,
+        }
+    )
 
     # If given, join back to reference deletions to ensure all rows are present
     if inframe_deletions is not None:
@@ -647,6 +730,9 @@ def count_nested_inframe_deletions_per_cancer_type(
                         "del_start": del_start,
                         "del_end": del_end,
                         "nested_patient_count": len(nested_patients),
+                        "nested_patient_ids": "&".join(
+                            sorted(nested_patients)
+                        ),
                     }
                 )
 
@@ -665,27 +751,58 @@ def count_nested_inframe_deletions_per_cancer_type(
                 "del_end": pl.Series([], dtype=pl.Int64),
                 "CANCER_TYPE": pl.Series([], dtype=pl.Utf8),
                 "nested_patient_count": pl.Series([], dtype=pl.Int64),
+                "nested_patient_ids": pl.Series([], dtype=pl.Utf8),
             }
         )
     )
 
     # Pivot cancer types into columns
-    pivot_df = nested_counts_df.pivot(
+    counts_wide = nested_counts_df.pivot(
         index=["Hugo_Symbol", "RefSeq", "del_start", "del_end"],
         on="CANCER_TYPE",
         values="nested_patient_count",
         aggregate_function="first",
     ).fill_null(0)
 
+    patients_wide = nested_counts_df.pivot(
+        index=["Hugo_Symbol", "RefSeq", "del_start", "del_end"],
+        on="CANCER_TYPE",
+        values="nested_patient_ids",
+        aggregate_function="first",
+    ).fill_null("")
+
     # Rename columns to include patient totals
-    column_mapping = {
+    count_col_mapping = {
         col: (
             f"NestedInframeDeletionsPerAA.{col}_Count_N_{per_cancer_patient_total[col]}"
         )
-        for col in per_cancer_patient_total.keys()
-        if col in pivot_df.columns
+        for col in per_cancer_patient_total
+        if col in counts_wide.columns
     }
-    if column_mapping:
-        pivot_df = pivot_df.rename(column_mapping)
 
-    return pivot_df
+    id_col_mapping = {
+        col: f"NestedInframeDeletionsPerAA.{col}_Patient_IDs"
+        for col in per_cancer_patient_total
+        if col in patients_wide.columns
+    }
+
+    counts_wide = counts_wide.rename(count_col_mapping)
+    patients_wide = patients_wide.rename(id_col_mapping)
+
+    result = counts_wide.join(
+        patients_wide,
+        on=["Hugo_Symbol", "RefSeq", "del_start", "del_end"],
+        how="left",
+    )
+
+    # column_mapping = {
+    #     col: (
+    #         f"NestedInframeDeletionsPerAA.{col}_Count_N_{per_cancer_patient_total[col]}"
+    #     )
+    #     for col in per_cancer_patient_total.keys()
+    #     if col in counts_wide.columns
+    # }
+    # if column_mapping:
+    #     pivot_df = counts_wide.rename(column_mapping)
+
+    return result

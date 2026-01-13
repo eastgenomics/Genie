@@ -125,16 +125,14 @@ def main():
         f"{datetime.now().replace(microsecond=0)} Generating nucleotide counts"
     )
     nucleotide_change_counts_all_cancer = count_same_nucleotide_change(
-        df=genie_data.select("grch38_description", "PATIENT_ID"),
+        df=genie_data,
         unique_patient_total=patient_total,
         count_type="All_Cancers",
     )
 
     nucleotide_change_counts_per_cancer = (
         count_same_nucleotide_change_per_cancer_type(
-            df=genie_data.select(
-                "grch38_description", "PATIENT_ID", "CANCER_TYPE"
-            ),
+            df=genie_data,
             unique_patients_per_cancer=per_cancer_patient_total,
         )
     )
@@ -149,20 +147,14 @@ def main():
         f"{datetime.now().replace(microsecond=0)} Generating amino acid counts"
     )
     amino_acid_change_counts_all_cancer = count_amino_acid_change(
-        df=genie_data.select("Hugo_Symbol", "HGVSp", "RefSeq", "PATIENT_ID"),
+        df=genie_data,
         unique_patient_total=patient_total,
         count_type="All_Cancers",
     )
 
     amino_acid_change_counts_per_cancer = (
         count_amino_acid_change_per_cancer_type(
-            df=genie_data.select(
-                "Hugo_Symbol",
-                "HGVSp",
-                "PATIENT_ID",
-                "RefSeq",
-                "CANCER_TYPE",
-            ),
+            df=genie_data,
             unique_patients_per_cancer=per_cancer_patient_total,
         )
     )
