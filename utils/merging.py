@@ -140,15 +140,6 @@ def merge_inframe_deletions_with_counts(
     return inframe_deletions_with_counts
 
 
-def build_count_block(df, prefix, totals):
-    cols = []
-    for label, n in totals:
-        col = f"{prefix}.{label}_Count_N_{n}"
-        if col in df.columns:
-            cols.append(col)
-    return cols
-
-
 def reorder_final_columns(
     df: pl.DataFrame,
     patient_total: int,
