@@ -639,7 +639,6 @@ def count_nested_inframe_deletions(
 
     # Rename nested count column with cohort info
     col_name = f"NestedInframeDeletionsPerAA.{cancer_count_type}_Count_N_{patient_total}"
-
     inframe_counts = inframe_counts.rename({"nested_patient_count": col_name})
 
     # If given, join back to reference deletions to ensure all rows are present
@@ -689,26 +688,26 @@ def count_nested_inframe_deletions_per_cancer_type(
     pl.DataFrame
         DataFrame with counts of matching or nested inframe deletions per cancer type.
     """
-    all_rows = []
+    all_results = []
 
-    # Iterate per gene/transcript
+    # Iterate over unique (gene, transcript) pairs
     for gene, transcript in (
         inframe_deletions_df.select(["Hugo_Symbol", "RefSeq"])
         .unique()
         .iter_rows()
     ):
-        subset = inframe_deletions_df.filter(
+        subset_gene_tx = inframe_deletions_df.filter(
             (pl.col("Hugo_Symbol") == gene) & (pl.col("RefSeq") == transcript)
         )
 
-        # Unique deletion ranges
+        # Get unique deletion ranges for this transcript
         for del_start, del_end in (
-            subset.select(["del_start", "del_end"])
+            subset_gene_tx.select(["del_start", "del_end"])
             .unique()
             .sort(["del_start", "del_end"])
             .iter_rows()
         ):
-            nested_df = subset.filter(
+            nested_df = subset_gene_tx.filter(
                 (pl.col("del_start") >= del_start)
                 & (pl.col("del_end") <= del_end)
             )
@@ -753,12 +752,12 @@ def count_nested_inframe_deletions_per_cancer_type(
                 "Duplicate_Patient_IDs": multi_cancer_ids,
             }
 
-            all_rows.append(row_data)
+            all_results.append(row_data)
 
     # Combine all rows
     combined_df = (
-        pl.DataFrame(all_rows)
-        if all_rows
+        pl.DataFrame(all_results)
+        if all_results
         else pl.DataFrame(
             {
                 "Hugo_Symbol": pl.Series([], dtype=pl.Utf8),
