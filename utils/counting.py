@@ -28,7 +28,8 @@ def multi_cancer_summary(
     Returns
     -------
     pl.DataFrame
-        _description_
+        dataframe listing patient count and patient IDs for multiple cancer
+        types
     """
     per_patient = (
         df.group_by(variant_cols + [patient_col])
@@ -639,11 +640,7 @@ def count_nested_inframe_deletions(
     # Rename nested count column with cohort info
     col_name = f"NestedInframeDeletionsPerAA.{cancer_count_type}_Count_N_{patient_total}"
 
-    inframe_counts = inframe_counts.rename(
-        {
-            "nested_patient_count": col_name,
-        }
-    )
+    inframe_counts = inframe_counts.rename({"nested_patient_count": col_name})
 
     # If given, join back to reference deletions to ensure all rows are present
     if inframe_deletions is not None:
@@ -677,12 +674,20 @@ def count_nested_inframe_deletions_per_cancer_type(
 ) -> pl.DataFrame:
     """
     Count the number of unique patients with inframe deletions that are either
-    the same as or nested within the current deletion, grouped by cancer type,
-    and flag patients contributing to multiple cancer types per range.
+    the same as or nested within the current deletion, grouped by cancer type.
+    Flag any individual patients with multiple cancer types.
 
-    Returns a wide DataFrame with:
-    - Per-cancer counts
-    - Multi-cancer patient summary (count + patient:cancers)
+    Parameters
+    ----------
+    inframe_deletions_df : pl.DataFrame
+        DataFrame containing inframe deletions with patient information.
+    per_cancer_patient_total : dict
+        Total number of unique patients in the dataset per cancer type.
+
+    Returns
+    -------
+    pl.DataFrame
+        DataFrame with counts of matching or nested inframe deletions per cancer type.
     """
     all_rows = []
 
