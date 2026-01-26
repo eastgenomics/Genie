@@ -148,33 +148,21 @@ def reorder_final_columns(
     solid_patient_total: int = None,
 ) -> pl.DataFrame:
     """
-    Reorder the final DataFrame columns to match the expected output format.
-
-    Parameters
-    ----------
-    df : pl.DataFrame
-        DataFrame containing the counts and variant information
-    patient_total : int
-        Total number of unique patients across all cancer types
-    per_cancer_patient_total : dict
-        Dictionary with cancer types as keys and number of unique patients
-        as values
-    haemonc_patient_total : int, optional
-        Total number of unique patients with haemonc cancers
-    solid_patient_total : int, optional
-        Total number of unique patients with solid cancers
-
-    Returns
-    -------
-    pl.DataFrame
-        DataFrame with columns reordered to match the expected output format
+    Reorder the final DataFrame columns to match the expected output format,
+    keeping the original structure and adding two extra columns per count type:
+    <CountType>.Duplicate_Patient_Count and <CountType>.Duplicate_Patient_IDs.
     """
-    # Drop unwanted columns
-    unwanted_prefixes = ("level", "del_start", "del_end")
-    df = df.select(
-        [c for c in df.columns if not c.startswith(unwanted_prefixes)]
-    )
 
+    # Drop unwanted columns
+    unwanted_prefixes = ["level", "del_start", "del_end"]
+    cols_to_keep = [
+        col
+        for col in df.columns
+        if not any(col.startswith(p) for p in unwanted_prefixes)
+    ]
+    df = df.select(cols_to_keep)
+
+    # First columns
     first_cols = [
         "Hugo_Symbol",
         "Entrez_Gene_Id",
@@ -188,54 +176,65 @@ def reorder_final_columns(
         "Variant_Classification",
         "Variant_Type",
     ]
-    first_cols = [c for c in first_cols if c in df.columns]
 
-    prefixes = [
+    # Base count types
+    count_types = [
         "SameNucleotideChange",
         "SameAminoAcidChange",
         "SameOrDownstreamTruncatingVariantsPerAA",
         "NestedInframeDeletionsPerAA",
     ]
 
-    scopes = [("All_Cancers", patient_total)]
+    # Build original count columns
+    count_cols = []
 
+    # All cancers
+    for ct in count_types:
+        col_name = f"{ct}.All_Cancers_Count_N_{patient_total}"
+        if col_name in df.columns:
+            count_cols.append(col_name)
+
+    # Haemonc cancers
     if haemonc_patient_total is not None:
-        scopes.append(("Haemonc_Cancers", haemonc_patient_total))
+        for ct in count_types:
+            col_name = f"{ct}.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+            if col_name in df.columns:
+                count_cols.append(col_name)
 
+    # Solid cancers
     if solid_patient_total is not None:
-        scopes.append(("Solid_Cancers", solid_patient_total))
+        for ct in count_types:
+            col_name = f"{ct}.Solid_Cancers_Count_N_{solid_patient_total}"
+            if col_name in df.columns:
+                count_cols.append(col_name)
 
-    for cancer, n in per_cancer_patient_total.items():
-        scopes.append((cancer, n))
+    # Per cancer type
+    for cancer_type, n_patients in per_cancer_patient_total.items():
+        for ct in count_types:
+            col_name = f"{ct}.{cancer_type}_Count_N_{n_patients}"
+            if col_name in df.columns:
+                count_cols.append(col_name)
 
-    ordered_count_cols = []
+    # Build duplicate columns immediately after each original count type
+    duplicate_cols = []
+    for ct in count_types:
+        duplicate_cols.append(f"{ct}.Duplicate_Patient_Count")
+        duplicate_cols.append(f"{ct}.Duplicate_Patient_IDs")
 
-    for prefix in prefixes:
-        # Count columns for this prefix
-        prefix_count_cols = []
-        for scope, n in scopes:
-            col = f"{prefix}.{scope}_Count_N_{n}"
-            if col in df.columns:
-                prefix_count_cols.append(col)
+    # Other columns
+    other_cols = [
+        col
+        for col in df.columns
+        if col not in first_cols
+        and col not in count_cols
+        and col not in duplicate_cols
+    ]
 
-        ordered_count_cols.extend(prefix_count_cols)
+    # Final column order
+    final_col_order = first_cols + other_cols + count_cols + duplicate_cols
+    df = df.select([col for col in final_col_order if col in df.columns])
 
-        # Duplicate columns (once per prefix, after last count)
-        dup_count = f"{prefix}.Duplicate_Patient_Count"
-        dup_ids = f"{prefix}.Duplicate_Patient_IDs"
-
-        if dup_count in df.columns:
-            ordered_count_cols.append(dup_count)
-        if dup_ids in df.columns:
-            ordered_count_cols.append(dup_ids)
-
-    used_cols = set(first_cols) | set(ordered_count_cols)
-    other_cols = [c for c in df.columns if c not in used_cols]
-
-    final_col_order = first_cols + other_cols + ordered_count_cols
-    df = df.select(final_col_order)
-
-    if "Hugo_Symbol" in df.columns and "grch38_description" in df.columns:
-        df = df.sort(["Hugo_Symbol", "grch38_description"])
+    # Sort by Hugo_Symbol and grch38_description
+    df = df.sort(["Hugo_Symbol", "grch38_description"])
 
     return df
