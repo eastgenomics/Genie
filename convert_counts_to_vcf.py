@@ -103,9 +103,40 @@ def generate_info_field_header_info(genie_counts):
     """
     info_fields = []
     for column in genie_counts.columns:
+        col_lower = column.lower()
+        if "duplicate" in col_lower and "patient" in col_lower:
+            is_count = col_lower.endswith("_count")
+
+            count_type = column.split("_Duplicate_")[0]
+            if is_count:
+                info_fields.append(
+                    {
+                        "id": column,
+                        "number": 1,
+                        "type": "Integer",
+                        "description": (
+                            "Number of patients with multiple cancer"
+                            " types which contributed to the"
+                            f" {count_type} count"
+                        ),
+                    }
+                )
+            else:
+                info_fields.append(
+                    {
+                        "id": column,
+                        "number": 1,
+                        "type": "String",
+                        "description": (
+                            "IDs of patients with multiple cancer types "
+                            f"which contributed to the {count_type} count"
+                        ),
+                    }
+                )
+            continue
         # If it's a count, we want to add it as an int and write which
         # count type it is and whether all cancers or specific cancer type
-        if "count" in column.lower():
+        if col_lower.endswith("_count"):
             parts = column.split("_")
             # Skip malformed columns
             if len(parts) < 2:
@@ -283,6 +314,7 @@ def write_variants_to_vcf(
             if (
                 value is None
                 or value == ""
+                or (isinstance(value, (int, float)) and value == 0)
                 or (isinstance(value, float) and math.isnan(value))
             ):
                 continue

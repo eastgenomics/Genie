@@ -118,6 +118,70 @@ class TestCountSameNucleotideChangePerCancerType:
                 "SameNucleotideChange.Lymphatic Cancer_Count_N_2": [0, 1, 0],
                 "SameNucleotideChange.Blood Cancer_Count_N_1": [0, 1, 0],
                 "SameNucleotideChange.Mastocytosis_Count_N_1": [0, 0, 1],
+                "SameNucleotideChange.Duplicate_Patient_Count": [0, 0, 0],
+                "SameNucleotideChange.Duplicate_Patient_IDs": ["", "", ""],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+    def test_count_same_nucleotide_change_per_cancer_type_duplicate_patients(
+        self,
+    ):
+        df = pl.from_dict(
+            {
+                "grch38_description": [
+                    "1_100_A_T",
+                    "1_100_A_T",
+                    "2_200_G_C",
+                    "3_300_T_G",
+                ],
+                "PATIENT_ID": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_4",
+                ],
+                "CANCER_TYPE": [
+                    "T-Lymphoblastic Leukemia/Lymphoma",
+                    "Lymphatic Cancer",
+                    "Lymphatic Cancer",
+                    "Mastocytosis",
+                ],
+            }
+        )
+
+        unique_patients_per_cancer = {
+            "T-Lymphoblastic Leukemia/Lymphoma": 10,
+            "Lymphatic Cancer": 2,
+            "Mastocytosis": 1,
+        }
+
+        result = utils.counting.count_same_nucleotide_change_per_cancer_type(
+            df, unique_patients_per_cancer
+        )
+
+        expected = pl.from_dict(
+            {
+                "grch38_description": ["1_100_A_T", "2_200_G_C", "3_300_T_G"],
+                "SameNucleotideChange.T-Lymphoblastic Leukemia/Lymphoma_Count_N_10": [
+                    1,
+                    0,
+                    0,
+                ],
+                "SameNucleotideChange.Lymphatic Cancer_Count_N_2": [1, 1, 0],
+                "SameNucleotideChange.Mastocytosis_Count_N_1": [0, 0, 1],
+                "SameNucleotideChange.Duplicate_Patient_Count": [1, 0, 0],
+                "SameNucleotideChange.Duplicate_Patient_IDs": [
+                    (
+                        "patient_1:Lymphatic Cancer|T-Lymphoblastic"
+                        " Leukemia/Lymphoma"
+                    ),
+                    "",
+                    "",
+                ],
             }
         )
 
@@ -482,6 +546,99 @@ class TestCountAminoAcidChangePerCancerType:
                 "SameAminoAcidChange.Cancer 2_Count_N_4": [0, 1, 0, 1],
                 "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1, 0, 0],
                 "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 0, 1, 0],
+                "SameAminoAcidChange.Duplicate_Patient_Count": [0, 0, 0, 0],
+                "SameAminoAcidChange.Duplicate_Patient_IDs": ["", "", "", ""],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_column_order=False, check_row_order=False
+        )
+
+    def test_count_amino_acid_change_per_cancer_type_one_transcript_per_gene_dup_patients(
+        self,
+    ):
+        df = pl.from_dict(
+            {
+                "grch38_description": [
+                    "1_100_A_T",
+                    "1_100_G_T",
+                    "1_200_G_C",
+                    "1_200_G_C",
+                    "1_200_G_C",
+                ],
+                "PATIENT_ID": [
+                    "patient_1",
+                    "patient_1",
+                    "patient_2",
+                    "patient_2",
+                    "patient_3",
+                ],
+                "CANCER_TYPE": [
+                    "Cancer 1",
+                    "Cancer 2",
+                    "Cancer 1",
+                    "Cancer 3",
+                    "Cancer 4",
+                ],
+                "Hugo_Symbol": [
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                    "GENE1",
+                ],
+                "RefSeq": [
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                    "Transcript1",
+                ],
+                "HGVSp": [
+                    "p.Ala100Thr",
+                    "p.Ala100Thr",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                    "p.Gly200Cys",
+                ],
+            }
+        )
+
+        unique_patients_per_cancer = {
+            "Cancer 1": 500,
+            "Cancer 2": 4,
+            "Cancer 3": 3,
+            "Cancer 4": 50,
+        }
+
+        result = utils.counting.count_amino_acid_change_per_cancer_type(
+            df, unique_patients_per_cancer
+        )
+
+        expected = pl.from_dict(
+            {
+                "Hugo_Symbol": ["GENE1", "GENE1"],
+                "HGVSp": [
+                    "p.Ala100Thr",
+                    "p.Gly200Cys",
+                ],
+                "RefSeq": [
+                    "Transcript1",
+                    "Transcript1",
+                ],
+                "SameAminoAcidChange.Cancer 1_Count_N_500": [
+                    1,
+                    1,
+                ],
+                "SameAminoAcidChange.Cancer 2_Count_N_4": [1, 0],
+                "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1],
+                "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 1],
+                "SameAminoAcidChange.Duplicate_Patient_Count": [1, 1],
+                "SameAminoAcidChange.Duplicate_Patient_IDs": [
+                    "patient_1:Cancer 1|Cancer 2",
+                    "patient_2:Cancer 1|Cancer 3",
+                ],
             }
         )
 
@@ -595,6 +752,14 @@ class TestCountAminoAcidChangePerCancerType:
                 "SameAminoAcidChange.Cancer 2_Count_N_4": [0, 1, 0, 1, 1],
                 "SameAminoAcidChange.Cancer 3_Count_N_3": [0, 1, 0, 0, 0],
                 "SameAminoAcidChange.Cancer 4_Count_N_50": [0, 0, 1, 0, 0],
+                "SameAminoAcidChange.Duplicate_Patient_Count": [0, 0, 0, 0, 0],
+                "SameAminoAcidChange.Duplicate_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ],
             }
         )
 
@@ -936,6 +1101,22 @@ class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
                     0,
                     0,
                 ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Duplicate_Patient_Count": [
+                    1,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                ],
+                "SameOrDownstreamTruncatingVariantsPerAA.Duplicate_Patient_IDs": [
+                    "patient_1:Cancer 1|Cancer 2",
+                    "",
+                    "",
+                    "",
+                    "patient_5:Cancer 2|Cancer 4",
+                    "",
+                ],
             }
         )
 
@@ -1254,6 +1435,20 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     0,
                     0,
                 ],
+                "NestedInframeDeletionsPerAA.Duplicate_Patient_Count": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                "NestedInframeDeletionsPerAA.Duplicate_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ],
             }
         )
 
@@ -1373,6 +1568,20 @@ class TestCountNestedInframeDeletionsPerCancerType:
                     0,
                     0,
                     0,
+                ],
+                "NestedInframeDeletionsPerAA.Duplicate_Patient_Count": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                "NestedInframeDeletionsPerAA.Duplicate_Patient_IDs": [
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
                 ],
             }
         )
