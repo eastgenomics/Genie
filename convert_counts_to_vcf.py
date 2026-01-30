@@ -317,16 +317,16 @@ def write_variants_to_vcf(
             if value is None or value == "":
                 continue
 
-            # Skip zero, including "0", 0, 0.0, np.int64(0) etc
+            # Skip zero/NaN for numeric-like values
+            numeric_value = None
             try:
-                if float(value) == 0:
-                    continue
-            except Exception:
-                pass
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                numeric_value = None
 
-            # Skip NaN
-            if isinstance(value, float) and math.isnan(value):
-                continue
+            if numeric_value is not None:
+                if numeric_value == 0 or math.isnan(numeric_value):
+                    continue
 
             try:
                 formatted_info_fields[field_name] = converter(value)
