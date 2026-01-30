@@ -1,5 +1,6 @@
 import argparse
 import math
+import numbers
 import polars as pl
 import pysam
 import re
@@ -311,13 +312,22 @@ def write_variants_to_vcf(
         formatted_info_fields = {}
         for field_name, converter in field_converters.items():
             value = row.get(field_name)
-            if (
-                value is None
-                or value == ""
-                or (isinstance(value, (int, float)) and value == 0)
-                or (isinstance(value, float) and math.isnan(value))
-            ):
+
+            # Skip missing
+            if value is None or value == "":
                 continue
+
+            # Skip zero/NaN for numeric-like values
+            numeric_value = None
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError):
+                numeric_value = None
+
+            if numeric_value is not None:
+                if numeric_value == 0 or math.isnan(numeric_value):
+                    continue
+
             try:
                 formatted_info_fields[field_name] = converter(value)
             except Exception as err:
