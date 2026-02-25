@@ -1,6 +1,5 @@
 import argparse
 import math
-import numbers
 import polars as pl
 import pysam
 import re
@@ -88,34 +87,6 @@ def remove_disallowed_chars_from_columns(genie_data):
     return genie_data
 
 
-def split_camel_case(text: str) -> str:
-    """
-    Convert CamelCase strings into space-separated words while preserving
-    consecutive uppercase groups (e.g., "AA")
-    Example:
-        SameOrDownstreamTruncatingVariantsPerAA
-        -> Same Or Downstream Truncating Variants Per AA
-        InfantileFibrosarcoma -> Infantile Fibrosarcoma
-
-    Parameters
-    ----------
-    text : str
-        Input string in CamelCase
-
-    Returns
-    -------
-    text: str
-        String with words separated by spaces
-    """
-    # Add space between lowercase-to-uppercase transitions
-    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
-
-    # Add space between letter-to-number transitions (optional, but useful)
-    text = re.sub(r"(?<=[A-Za-z])(?=[0-9])", " ", text)
-
-    return text
-
-
 def generate_info_field_header_info(genie_counts):
     """
     Generate INFO field headers for the VCF file based on the genie_counts DataFrame
@@ -165,15 +136,13 @@ def generate_info_field_header_info(genie_counts):
             continue
         # If it's a count, we want to add it as an int and write which
         # count type it is and whether all cancers or specific cancer type
-        if "count" in col_lower:
+        if "count" in col_lower and "Count" in column.split("_"):
             parts = column.split("_")
 
             count_index = parts.index("Count")
 
-            count_type_description = split_camel_case(parts[0])
-            cancer_type_description = " ".join(
-                split_camel_case(p) for p in parts[1:count_index]
-            )
+            count_type_description = parts[0]
+            cancer_type_description = " ".join(parts[1:count_index])
 
             info_fields.append(
                 {
@@ -182,8 +151,12 @@ def generate_info_field_header_info(genie_counts):
                     "type": "Integer",
                     "description": (
                         "Number of unique patients with"
-                        f" {count_type_description} in"
-                        f" {cancer_type_description}"
+                        f" {count_type_description}"
+                        + (
+                            f" in {cancer_type_description}"
+                            if cancer_type_description
+                            else ""
+                        )
                     ),
                 }
             )
