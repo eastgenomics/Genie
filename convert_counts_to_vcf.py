@@ -1,6 +1,5 @@
 import argparse
 import math
-import numbers
 import polars as pl
 import pysam
 import re
@@ -137,22 +136,27 @@ def generate_info_field_header_info(genie_counts):
             continue
         # If it's a count, we want to add it as an int and write which
         # count type it is and whether all cancers or specific cancer type
-        if col_lower.endswith("_count"):
+        if "count" in col_lower and "Count" in column.split("_"):
             parts = column.split("_")
-            # Skip malformed columns
-            if len(parts) < 2:
-                print("Skipping malformed column:", column)
-                continue
+
+            count_index = parts.index("Count")
+
             count_type_description = parts[0]
-            cancer_type_description = parts[1]
+            cancer_type_description = " ".join(parts[1:count_index])
+
             info_fields.append(
                 {
                     "id": column,
                     "number": 1,
                     "type": "Integer",
                     "description": (
-                        f"Number of patients with {count_type_description} in"
-                        f" {cancer_type_description}"
+                        "Number of unique patients with"
+                        f" {count_type_description}"
+                        + (
+                            f" in {cancer_type_description}"
+                            if cancer_type_description
+                            else ""
+                        )
                     ),
                 }
             )
@@ -190,7 +194,7 @@ def generate_info_field_header_info(genie_counts):
                     "id": column,
                     "number": 1,
                     "type": "String",
-                    "description": f"{column} from Genie data",
+                    "description": f"{column} annotated by VEP",
                 }
             )
 
