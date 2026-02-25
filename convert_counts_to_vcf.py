@@ -88,6 +88,34 @@ def remove_disallowed_chars_from_columns(genie_data):
     return genie_data
 
 
+def split_camel_case(text: str) -> str:
+    """
+    Convert CamelCase strings into space-separated words while preserving
+    consecutive uppercase groups (e.g., "AA")
+    Example:
+        SameOrDownstreamTruncatingVariantsPerAA
+        -> Same Or Downstream Truncating Variants Per AA
+        InfantileFibrosarcoma -> Infantile Fibrosarcoma
+
+    Parameters
+    ----------
+    text : str
+        Input string in CamelCase
+
+    Returns
+    -------
+    text: str
+        String with words separated by spaces
+    """
+    # Add space between lowercase-to-uppercase transitions
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+
+    # Add space between letter-to-number transitions (optional, but useful)
+    text = re.sub(r"(?<=[A-Za-z])(?=[0-9])", " ", text)
+
+    return text
+
+
 def generate_info_field_header_info(genie_counts):
     """
     Generate INFO field headers for the VCF file based on the genie_counts DataFrame
@@ -137,21 +165,24 @@ def generate_info_field_header_info(genie_counts):
             continue
         # If it's a count, we want to add it as an int and write which
         # count type it is and whether all cancers or specific cancer type
-        if col_lower.endswith("_count"):
+        if "count" in col_lower:
             parts = column.split("_")
-            # Skip malformed columns
-            if len(parts) < 2:
-                print("Skipping malformed column:", column)
-                continue
-            count_type_description = parts[0]
-            cancer_type_description = parts[1]
+
+            count_index = parts.index("Count")
+
+            count_type_description = split_camel_case(parts[0])
+            cancer_type_description = " ".join(
+                split_camel_case(p) for p in parts[1:count_index]
+            )
+
             info_fields.append(
                 {
                     "id": column,
                     "number": 1,
                     "type": "Integer",
                     "description": (
-                        f"Number of patients with {count_type_description} in"
+                        "Number of unique patients with"
+                        f" {count_type_description} in"
                         f" {cancer_type_description}"
                     ),
                 }
@@ -190,7 +221,7 @@ def generate_info_field_header_info(genie_counts):
                     "id": column,
                     "number": 1,
                     "type": "String",
-                    "description": f"{column} from Genie data",
+                    "description": f"{column} annotated by VEP",
                 }
             )
 
