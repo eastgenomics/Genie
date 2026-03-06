@@ -82,6 +82,9 @@ def read_in_to_polars_df(
                 "AGE_AT_SEQ_REPORT": pl.Utf8,
                 "Chromosome": pl.Utf8,
                 "chrom_grch38": pl.Utf8,
+                "Protein_position": pl.Utf8,
+                "CDS_position": pl.Utf8,
+                "Exon_number": pl.Utf8,
             },
         )
         return df

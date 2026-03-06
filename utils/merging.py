@@ -1,7 +1,6 @@
 from functools import reduce
 
 import polars as pl
-from sklearn import metrics
 
 
 def multi_merge(
@@ -58,20 +57,25 @@ def merge_truncating_variants_counts(
     truncating_variants_no_dups = truncating_variants.unique(
         subset="grch38_description", keep="first"
     ).select(
-        ["Hugo_Symbol", "grch38_description", "Transcript_ID", "CDS_position"]
+        [
+            "Hugo_Symbol",
+            "grch38_description",
+            "RefSeq",
+            "Protein_position_start",
+        ]
     )
 
     # Merge the truncating variants with the counts
     merged_counts = multi_merge(
         truncating_variants_no_dups,
         [truncating_counts_all_cancers, truncating_counts_per_cancer],
-        on=["Hugo_Symbol", "Transcript_ID", "CDS_position"],
+        on=["Hugo_Symbol", "RefSeq", "Protein_position_start"],
         how="left",
     )
 
     # Remove these columns to not cause merge issues later
     merged_counts = merged_counts.drop(
-        ["Hugo_Symbol", "Transcript_ID", "CDS_position"]
+        ["Hugo_Symbol", "RefSeq", "Protein_position_start"]
     )
 
     return merged_counts
@@ -106,7 +110,7 @@ def merge_inframe_deletions_with_counts(
     ).select(
         [
             "Hugo_Symbol",
-            "Transcript_ID",
+            "RefSeq",
             "grch38_description",
             "del_start",
             "del_end",
@@ -120,7 +124,7 @@ def merge_inframe_deletions_with_counts(
     merged_counts = reduce(
         lambda left, right: left.join(
             right,
-            on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
+            on=["Hugo_Symbol", "RefSeq", "del_start", "del_end"],
             how="left",
         ),
         dfs_to_merge,
@@ -129,9 +133,9 @@ def merge_inframe_deletions_with_counts(
     # Merge the unique inframe deletions with the counts
     inframe_deletions_with_counts = inframe_with_positions_no_dups.join(
         merged_counts,
-        on=["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"],
+        on=["Hugo_Symbol", "RefSeq", "del_start", "del_end"],
         how="left",
-    ).drop(["Hugo_Symbol", "Transcript_ID", "del_start", "del_end"])
+    ).drop(["Hugo_Symbol", "RefSeq", "del_start", "del_end"])
 
     return inframe_deletions_with_counts
 
@@ -140,36 +144,17 @@ def reorder_final_columns(
     df: pl.DataFrame,
     patient_total: int,
     per_cancer_patient_total: dict,
-    position_method: str,
     haemonc_patient_total: int = None,
     solid_patient_total: int = None,
 ) -> pl.DataFrame:
     """
-    Reorder the final DataFrame columns to match the expected output format.
-
-    Parameters
-    ----------
-    df : pl.DataFrame
-        DataFrame containing the counts and variant information
-    patient_total : int
-        Total number of unique patients across all cancer types
-    per_cancer_patient_total : dict
-        Dictionary with cancer types as keys and number of unique patients
-        as values
-    haemonc_patient_total : int, optional
-        Total number of unique patients with haemonc cancers
-    solid_patient_total : int, optional
-        Total number of unique patients with solid cancers
-    position_method : str
-        Method used to determine deletion positions, "CDS" or "AA"
-
-    Returns
-    -------
-    pl.DataFrame
-        DataFrame with columns reordered to match the expected output format
+    Reorder the final DataFrame columns to match the expected output format,
+    keeping the original structure and adding two extra columns per count type:
+    <CountType>.Duplicate_Patient_Count and <CountType>.Duplicate_Patient_IDs.
     """
+
     # Drop unwanted columns
-    unwanted_prefixes = ["CDS_position", "level", "del_start", "del_end"]
+    unwanted_prefixes = ["level", "del_start", "del_end"]
     cols_to_keep = [
         col
         for col in df.columns
@@ -177,14 +162,13 @@ def reorder_final_columns(
     ]
     df = df.select(cols_to_keep)
 
-    # Set first columns
+    # First columns
     first_cols = [
         "Hugo_Symbol",
         "Entrez_Gene_Id",
         "grch38_description",
         "grch37_norm",
         "Genie_description",
-        "Transcript_ID",
         "RefSeq",
         "Consequence",
         "HGVSc",
@@ -193,52 +177,61 @@ def reorder_final_columns(
         "Variant_Type",
     ]
 
-    # Build count columns
-    count_cols = [
-        f"SameNucleotideChange.All_Cancers_Count_N_{patient_total}",
-        f"SameAminoAcidChange.All_Cancers_Count_N_{patient_total}",
-        f"SameOrDownstreamTruncatingVariantsPerCDS.All_Cancers_Count_N_{patient_total}",
-        f"NestedInframeDeletionsPer{position_method}.All_Cancers_Count_N_{patient_total}",
+    # Base count types
+    count_types = [
+        "SameNucleotideChange",
+        "SameAminoAcidChange",
+        "SameOrDownstreamTruncatingVariantsPerAA",
+        "NestedInframeDeletionsPerAA",
     ]
 
+    # Build original count columns
+    count_cols = []
+
+    # All cancers
+    for ct in count_types:
+        col_name = f"{ct}.All_Cancers_Count_N_{patient_total}"
+        if col_name in df.columns:
+            count_cols.append(col_name)
+
+    # Haemonc cancers
     if haemonc_patient_total is not None:
-        count_cols += [
-            f"SameNucleotideChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
-            f"SameAminoAcidChange.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
-            f"SameOrDownstreamTruncatingVariantsPerCDS.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
-            f"NestedInframeDeletionsPer{position_method}.Haemonc_Cancers_Count_N_{haemonc_patient_total}",
-        ]
+        for ct in count_types:
+            col_name = f"{ct}.Haemonc_Cancers_Count_N_{haemonc_patient_total}"
+            if col_name in df.columns:
+                count_cols.append(col_name)
 
+    # Solid cancers
     if solid_patient_total is not None:
-        count_cols += [
-            f"SameNucleotideChange.Solid_Cancers_Count_N_{solid_patient_total}",
-            f"SameAminoAcidChange.Solid_Cancers_Count_N_{solid_patient_total}",
-            f"SameOrDownstreamTruncatingVariantsPerCDS.Solid_Cancers_Count_N_{solid_patient_total}",
-            f"NestedInframeDeletionsPer{position_method}.Solid_Cancers_Count_N_{solid_patient_total}",
-        ]
+        for ct in count_types:
+            col_name = f"{ct}.Solid_Cancers_Count_N_{solid_patient_total}"
+            if col_name in df.columns:
+                count_cols.append(col_name)
 
+    # Per cancer type
     for cancer_type, n_patients in per_cancer_patient_total.items():
-        count_cols.extend(
-            [
-                f"SameNucleotideChange.{cancer_type}_Count_N_{n_patients}",
-                f"SameAminoAcidChange.{cancer_type}_Count_N_{n_patients}",
-                f"SameOrDownstreamTruncatingVariantsPerCDS.{cancer_type}_Count_N_{n_patients}",
-                f"NestedInframeDeletionsPer{position_method}.{cancer_type}_Count_N_{n_patients}",
-            ]
-        )
+        for ct in count_types:
+            col_name = f"{ct}.{cancer_type}_Count_N_{n_patients}"
+            if col_name in df.columns:
+                count_cols.append(col_name)
 
-    # Keep only columns that exist in df
-    count_cols = [col for col in count_cols if col in df.columns]
+    # Build duplicate columns immediately after each original count type
+    duplicate_cols = []
+    for ct in count_types:
+        duplicate_cols.append(f"{ct}.Duplicate_Patient_Count")
+        duplicate_cols.append(f"{ct}.Duplicate_Patient_IDs")
 
     # Other columns
     other_cols = [
         col
         for col in df.columns
-        if col not in first_cols and col not in count_cols
+        if col not in first_cols
+        and col not in count_cols
+        and col not in duplicate_cols
     ]
 
     # Final column order
-    final_col_order = first_cols + other_cols + count_cols
+    final_col_order = first_cols + other_cols + count_cols + duplicate_cols
     df = df.select([col for col in final_col_order if col in df.columns])
 
     # Sort by Hugo_Symbol and grch38_description
