@@ -378,30 +378,6 @@ def main():
             col: lambda x: x.strip() if isinstance(x, str) else x
             for col in ["Chromosome", "Reference_Allele", "Tumor_Seq_Allele2"]
         },
-        usecols=[
-            "Hugo_Symbol",
-            "Chromosome",
-            "Start_Position",
-            "Reference_Allele",
-            "Tumor_Seq_Allele2",
-            "Consequence",
-            "Variant_Classification",
-            "Tumor_Sample_Barcode",
-            "HGVSc",
-            "HGVSp",
-            "Transcript_ID",
-            "RefSeq",
-            "Protein_position",
-            "Exon_Number",
-            "PATIENT_ID",
-            "SAMPLE_ID",
-            "AGE_AT_SEQ_REPORT",
-            "ONCOTREE_CODE",
-            "SAMPLE_TYPE",
-            "SEQ_ASSAY_ID",
-            "CANCER_TYPE",
-            "CANCER_TYPE_DETAILED",
-        ],
     )
 
     genie_data_with_sample_info = add_unique_variant_field_to_maf(
