@@ -978,6 +978,58 @@ class TestCountFrameshiftTruncatingAndNonsenseInCancers:
         )
 
 
+class TestCountFrameshiftTruncatingAndNonsenseGroupedSubgroup:
+    """
+    Regression tests for the grouped (solid/haemonc cancer) case, where
+    `df` is pre-filtered to a subgroup of patients but `truncating_variants`
+    is the full, unfiltered set of truncating variants. An anchor position
+    whose own patient(s) fall outside the subgroup must still be counted if
+    a downstream position has qualifying subgroup patients, rather than
+    being silently absent and later filled with 0.
+    """
+
+    def test_anchor_position_with_no_subgroup_patients_still_counted(self):
+        # Mirrors the PDE4DIP example: the anchor variant's own patient is
+        # not in the subgroup (e.g. not a solid cancer), but a downstream
+        # variant on the same transcript does have a subgroup patient.
+        truncating_variants = pl.from_dict(
+            {
+                "grch38_description": ["1:100A>T", "1:200A>T"],
+                "Hugo_Symbol": ["GENE1", "GENE1"],
+                "RefSeq": ["Transcript1", "Transcript1"],
+                "Protein_position_start": [100, 200],
+                "PATIENT_ID": ["patient_non_solid", "patient_solid"],
+            }
+        )
+
+        # Subgroup df only contains the downstream variant, since
+        # patient_non_solid isn't part of this subgroup
+        subgroup_df = truncating_variants.filter(
+            pl.col("PATIENT_ID") == "patient_solid"
+        )
+
+        result = utils.counting.count_frameshift_truncating_and_nonsense(
+            df=subgroup_df,
+            cancer_count_type="Solid_Cancers",
+            patient_total=100,
+            truncating_variants=truncating_variants,
+        )
+
+        expected = pl.from_dict(
+            {
+                "grch38_description": ["1:100A>T", "1:200A>T"],
+                "SameOrDownstreamTruncatingVariantsPerAA.Solid_Cancers_Count_N_100": [
+                    1,
+                    1,
+                ],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_row_order=False, check_column_order=False
+        )
+
+
 class TestCountFrameshiftTruncatingAndNonsensePerCancerType:
     def test_count_frameshift_truncating_and_nonsense_per_cancer(self):
         df = pl.DataFrame(
@@ -1311,6 +1363,62 @@ class TestCountNestedInframeDeletionsAllCancers:
                     1,
                     1,
                     2,
+                    1,
+                ],
+            }
+        )
+
+        assert_frame_equal(
+            result, expected, check_row_order=False, check_column_order=False
+        )
+
+
+class TestCountNestedInframeDeletionsGroupedSubgroup:
+    """
+    Regression tests for the grouped (solid/haemonc cancer) case, where
+    `inframe_deletions_df` is pre-filtered to a subgroup of patients but
+    `inframe_deletions` is the full, unfiltered set of inframe deletions.
+    An anchor range whose own patient(s) fall outside the subgroup must
+    still be counted if a nested range has qualifying subgroup patients,
+    rather than being silently absent and later filled with 0.
+    """
+
+    def test_anchor_range_with_no_subgroup_patients_still_counted(self):
+        # Mirrors the ARID1A example: the anchor deletion's own patient is
+        # not in the subgroup (e.g. not a solid cancer), but a nested
+        # deletion on the same transcript does have a subgroup patient.
+        inframe_deletions = pl.from_dict(
+            {
+                "Hugo_Symbol": ["GENE1", "GENE1"],
+                "grch38_description": ["1:2231_2237del", "1:2233_2237del"],
+                "RefSeq": ["Transcript1", "Transcript1"],
+                "del_start": [2231, 2233],
+                "del_end": [2237, 2237],
+                "PATIENT_ID": ["patient_non_solid", "patient_solid"],
+            }
+        )
+
+        # Subgroup df only contains the nested deletion, since
+        # patient_non_solid isn't part of this subgroup
+        subgroup_df = inframe_deletions.filter(
+            pl.col("PATIENT_ID") == "patient_solid"
+        )
+
+        result = utils.counting.count_nested_inframe_deletions(
+            inframe_deletions_df=subgroup_df,
+            cancer_count_type="Solid_Cancers",
+            patient_total=100,
+            inframe_deletions=inframe_deletions,
+        )
+
+        expected = pl.from_dict(
+            {
+                "grch38_description": [
+                    "1:2231_2237del",
+                    "1:2233_2237del",
+                ],
+                "NestedInframeDeletionsPerAA.Solid_Cancers_Count_N_100": [
+                    1,
                     1,
                 ],
             }

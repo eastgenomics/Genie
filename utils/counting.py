@@ -334,14 +334,26 @@ def count_frameshift_truncating_and_nonsense(
     """
     all_results = []
 
+    # Anchor positions (the variants a count is computed for) must come from
+    # the full, unfiltered set of truncating variants when given, so that a
+    # position with no patients in this subgroup (e.g. solid/haemonc cancers)
+    # is still a valid anchor. Only the patients counted as being at-or-
+    # downstream of that position are restricted to this subgroup's df.
+    anchor_df = truncating_variants if truncating_variants is not None else df
+
     # Iterate over unique (gene, transcript) pairs
     for gene, transcript in (
-        df.select(["Hugo_Symbol", "RefSeq"]).unique().iter_rows()
+        anchor_df.select(["Hugo_Symbol", "RefSeq"]).unique().iter_rows()
     ):
+        anchor_subset = anchor_df.filter(
+            (pl.col("Hugo_Symbol") == gene) & (pl.col("RefSeq") == transcript)
+        )
         subset = df.filter(
             (pl.col("Hugo_Symbol") == gene) & (pl.col("RefSeq") == transcript)
         )
-        positions = sorted(subset["Protein_position_start"].unique().to_list())
+        positions = sorted(
+            anchor_subset["Protein_position_start"].unique().to_list()
+        )
 
         rows = []
         for pos in positions:
@@ -579,18 +591,32 @@ def count_nested_inframe_deletions(
     """
     all_results = []
 
+    # Anchor ranges (the deletions a count is computed for) must come from
+    # the full, unfiltered set of inframe deletions when given, so that a
+    # range with no patients in this subgroup (e.g. solid/haemonc cancers)
+    # is still a valid anchor. Only the patients counted as nested within
+    # that range are restricted to this subgroup's inframe_deletions_df.
+    anchor_df = (
+        inframe_deletions
+        if inframe_deletions is not None
+        else inframe_deletions_df
+    )
+
     # Iterate over (gene, transcript) pairs
     for gene, transcript in (
-        inframe_deletions_df.select(["Hugo_Symbol", "RefSeq"])
-        .unique()
-        .iter_rows()
+        anchor_df.select(["Hugo_Symbol", "RefSeq"]).unique().iter_rows()
     ):
+        anchor_subset = anchor_df.filter(
+            (pl.col("Hugo_Symbol") == gene) & (pl.col("RefSeq") == transcript)
+        )
         subset = inframe_deletions_df.filter(
             (pl.col("Hugo_Symbol") == gene) & (pl.col("RefSeq") == transcript)
         )
 
         unique_ranges = (
-            subset.select(["Hugo_Symbol", "RefSeq", "del_start", "del_end"])
+            anchor_subset.select(
+                ["Hugo_Symbol", "RefSeq", "del_start", "del_end"]
+            )
             .unique()
             .sort(["del_start", "del_end"])
         )
